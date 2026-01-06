@@ -1,0 +1,35 @@
+place <- DSG.TRAVERSABILITY
+connected(p1: place, p2: place) <- neighbors(p1, p2)
+
+region <- DSG.REGIONS
+contains(r: region, p: place) <- neighbors(r, p)
+
+(move p1 p2) | (connected p1 p2) : (at p1) -> (at p2) (not (at p1))
+
+(visited p): (at p) -> (visited p)
+
+# Object Discovery
+
+# Actions
+
+(move p1 p2) | (connected p1 p2) : (at p1) -> (at p2) (not (at p1))
+
+# Note! With this definition of pick, you can't say "the trash should never go in the bedroom" because when the robot is holding an object the object isn't connected to any place
+(pick o p) : (at p) (at o p) (not hand-full) -> (holding o) (not (at o p)) (hand-full)
+
+(place o p): (at p) (holding o) -> (at o p) (not hand-full)
+
+# Derived
+
+(at x p) (contains r p) -> (in x r)
+
+# Belief dynamics
+
+# if you observe a new (unobserved) place, you might find an object
+((not (visited p)) -> (visited p)) yields (o, (at o p))
+
+# An unknown object in a kitchen might be a cup
+(in o k) | k.class == Kitchen, o.class = UNOBSERVED => o.class = maybe(cup)
+
+
+goal: (in c1 k) (in c2 k) | c1.class = cup, c2.class = cup, k.class = kitchen

@@ -1,0 +1,63 @@
+1/5/2026
+
+* We are looking to define semantics for transforming or changing (PO)MDPs with explicit hierarchies
+* Introducing "TSP as macroaction" has implicit hierarchy, in that we have implemented and defined going to each place "outside" of the planning domain
+    * But if we want the macro action to inherit properties like "might find cup", we need to add that as a new property of the macro action
+    * Instead, we would like to add "might find cup" at the lowest level of abstraction, and automatically infer the updates to the higher-level abstraction
+
+* Traditionally, planning problems have been defined in isolation.
+    * e.g., introducing a planning problem P
+
+* We are interested in perturbations or transformations of P
+    * Some perturbations are easy -- Adding a transition to the MDP with the same state space
+    * Adding multiple robots is a perturbation
+        * If we change the "base" MDP do we need to re-write the multi-robot MDP?
+    * Changing belief dynamics is a perturbation
+        * e.g., "if we are in a kitchen and we observe a new place, there might be a cup in that place"
+        * How do we apply this perturbation to abstractions in a domain?
+
+Outline of what we would to introduce and show:
+
+Theory / Formulation:
+* Especially in the LLM era, great benefit in having a model of POMDP relationships
+* Formalize "perturbation"
+* Handling different mappings from perception symbols (e.g., nodes in scene graph) to planning symbols (e.g., pddl objects) could be seen as a perturbation -- should explicitly represent the mapping from perception to planning concepts separately from logic internal to planning domain
+* Demonstrate how writing down multi-robot planning domain is simplified with concept of "multi-robot perturbation"
+    * Good example of projection / lifting between domains
+* Explain that applying perturbations in domains with hierarchy isn't straightforward
+* What are the semantics of perturbations in domains with hierarchy?
+
+Algorithmic Improvements:
+* Abstraction as a perturbation
+    * "TSP Macroaction"
+    * Show that we can solve non-trivial planning problems faster by adding the "TSP template"
+* perturbing belief space dynamics in abstracted domain
+
+
+Order of work:
+* Pure (constrained) exploration
+    * (forall x (visited x))
+    * (forall (x \in Kitchen) (visited x))
+    * (forall (x \in X) (visited x)) and (forall (y \in Y) (visited y))
+
+* Exploration + Tasking
+    * Explore the kitchen and pick up the cup (cup starts in DSG)
+
+* Full belief space
+    * You might find a cup in the kitchen. Bring a cup to the living room (DSG starts unexplored)
+
+
+---
+* How to represent connection between frontiers and exploration?
+    * Start with "fully known prior" case -- no frontiers, MDP dynamics are same as fully explored case
+    * next, consider "explore the world" case with no prior map
+        * now we have frontiers
+        * next to each frontier there might be a place
+        * and next to each unobserved place there might be another frontier
+        * _could_ be represented as streams -- S(frontier) -> predicted_place, T(predicted_place) -> frontier, Visit(predicted_place) -> Maybe(Place) [maybe predicted places count as real places in the planning problem?]
+        * (don't want to run PDDLStream, but same idea)
+        * "fully explore the world" means, "Every possible place is visited", which means "visit all predicted places" and a necessary condition for that is to visit every frontier
+        * We want to be able to run the above logic automatically.
+        * Once we have deduced the subgoal "visit every frontier", we want to replace with our optimization of Greedy/TSP/MCHP
+        * Think of the problem as manipulating the belief space by "searching" for a counterexample and then "fixing" it
+        * Forall (x: Place), (visited x) would be invalidated by a place that isn't visited. All places *in* the scene graph are visited. However, S can generate (predicted?) places that aren't visited. We must visit all of these

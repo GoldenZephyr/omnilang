@@ -1,0 +1,27 @@
+## Geometric Exploration
+
+# DSG Symbol Mapping
+
+# symbol-type <- source | filter expression
+place <- DSG.TRAVERSABILITY | semantic_class in ["road"]
+
+# predicate(symbol1, symbol2) <- f(symbol1, symbol2)
+connected(p1: place, p2: place) <- neighbors(p1, p2)
+# TODO: how to implement distance-based connection instead of trusting scene graph neighbors?
+
+
+# (name args) | static constraints : preconditions -> postconditions
+
+# Actions
+(move p1 p2) | (connected p1 p2) : (at p1) -> (at p2) (not (at p1))
+
+# State Dynamics
+(visited p): (at p) -> (visited p)
+
+# "Problem"
+initial: (at-place p1)
+goal: (forall (p: place) (visited p))
+
+# Optimizations
+
+TSP({p_i}) -> { (visited p_i) } # Need to ensure p_i is connected
