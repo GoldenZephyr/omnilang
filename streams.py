@@ -1,10 +1,36 @@
-from testing import Fact, Symbol, ground_predicate, ground, State
+from testing import (
+    Fact,
+    Symbol,
+    ground_predicate,
+    ground,
+    State,
+    forall,
+    Environment,
+    ImproperQuantifiedSet,
+    restrict,
+    generate,
+)
+from dsg_pddl.pddl_grounding import PddlProblem, GroundedPddlProblem, PddlDomain
+from dsg_pddl.pddl_planning import solve_pddl
+
+
+def eval_quantifier(env, quantified_expression: ImproperQuantifiedSet, state: State):
+    # TODO: currently state isn't used. It's not clear whether we should
+    # restrict the domain to the symbols in env or re-extract the symbols in
+    # state.
+    # They mean slightly different things
+    return restrict(
+        env,
+        quantified_expression,
+        quantified_expression.unbound_symbols[0],
+        env.symbols,
+    )
 
 
 def get_pddl_types(domain):
     # For these purposes, a type is a unary predicate that isn't present in any action effects
     # Or, I guess maybe we just read the type section from the domain?
-    return ["Place", "frontier"]
+    return ["place", "frontier", "obj"]
 
 
 def group_objects_by_type(domain, facts):
@@ -12,7 +38,9 @@ def group_objects_by_type(domain, facts):
     type_to_objects = {}
     for f in facts:
         if f.head in types:
-            type_to_objects[f.head] = f.body[0]
+            if f.head not in type_to_objects:
+                type_to_objects[f.head] = []
+            type_to_objects[f.head].append(f.body[0])
     return type_to_objects
 
 
@@ -93,7 +121,7 @@ def add_facts_to_state(facts, state):
 
 
 def apply_transitive_frontier_rule(facts):
-    connected_facts = [f for f in facts if f.head == "Connected"]
+    connected_facts = [f for f in facts if f.head == "connected"]
     print("connected facts: ", connected_facts)
     frontiers = [f.body[0] for f in facts if f.head == "frontier"]
     print("frontiers: ", frontiers)
@@ -124,25 +152,27 @@ def apply_rules(facts):
     apply_transitive_frontier_rule(facts)
 
 
+# A.) A stream representing "there might be a place next to a frontier"
 S = Stream(
     [Symbol("?f")],
     [Fact("frontier", [Symbol("?f")])],
     ["?place"],
     [
-        Fact("Place", [Symbol("?place")]),
-        Fact("Connected", [Symbol("?f"), Symbol("?place")]),
+        Fact("place", [Symbol("?place")]),
+        Fact("connected", [Symbol("?f"), Symbol("?place")]),
     ],
     symbol_prefixes=["pred"],
 )
 
-original_symbols = [Symbol("f1"), Symbol("f2"), Symbol("o1")]
+original_symbols = [Symbol("f1"), Symbol("f2"), Symbol("o1"), Symbol("p1")]
 
 facts = [
     Fact("frontier", [Symbol("f1")]),
     Fact("frontier", [Symbol("f2")]),
-    Fact("Place", [Symbol("p1")]),
-    Fact("object", [Symbol("o1")]),
-    Fact("Connected", [Symbol("f1"), Symbol("p1")]),
+    Fact("place", [Symbol("p1")]),
+    Fact("obj", [Symbol("o1")]),
+    Fact("connected", [Symbol("f1"), Symbol("p1")]),
+    Fact("connected", [Symbol("f2"), Symbol("p1")]),
 ]
 state = State(facts)
 
@@ -158,12 +188,13 @@ symbol_to_facts = group_facts_by_symbol(facts)
 applicable_args = S.get_applicable_args(symbol_to_facts)
 print("Applicable args: ", applicable_args)
 print("Looping:")
+symbols = original_symbols
 for a in applicable_args:
-    symbols, new_facts = S.apply(a)
+    new_symbols, new_facts = S.apply(a)
     # print("Symbols from stream: ", symbols)
     # new_state = add_facts_to_state(new_facts, state)
     state = add_facts_to_state(new_facts, state)
-    symbols = original_symbols + symbols
+    symbols = symbols + new_symbols
 
     # print("New state: ", new_state)
     # print("Symbols: ", symbols)
@@ -174,24 +205,66 @@ for f in state.facts:
     print(f)
 
 
+# B.) A rule that says "if frontier F is connected to both A and B, then A is connected to B
+# This is necessary if we want to be able to apply a previously-constructed
+# exploration domain to a new representation with frontiers.
+
 apply_rules(state.facts)
+
 print("Final facts:\n")
 for f in state.facts:
     print(f)
 
+print("Final symbols: ")
+print(symbols)
 
 objects = group_objects_by_type(None, state.facts)
 init = state.facts
-goal = forall("p", "Place", Fact("visited", Symbol("p")))
-expanded_goal = expand_quantifiers(
+goal = forall("p", "place", Fact("visited", [Symbol("p")]))
+
+type_to_objects = group_objects_by_type(None, state.facts)
+symbol_to_type = {}
+for k, v in type_to_objects.items():
+    for val in v:
+        symbol_to_type[val] = k
+env = Environment(None, symbols, symbol_to_type)
+
+evaled_goal = eval_quantifier(env, goal, state.facts)
+print("evaled goal: ", evaled_goal)
+print("Constituent facts: ")
+for g in generate(evaled_goal):
+    print(g)
+
+init.append(Fact("at", [Symbol("p1")]))
+init.append(Fact("visited", [Symbol("p1")]))
+
+tuple_goal = ("and",) + tuple(a.to_tuple() for a in generate(evaled_goal))
+with open("test_domain.pddl", "r") as fo:
+    domain = PddlDomain(fo.read())
 
 problem = PddlProblem(
     name="test_explore",
-    domain="exploration",
-    objects=objects,
-    initial_facts=init,
-    goal=goal,
+    domain="exploration_test",
+    # TODO: "T" is temporary until we properly deal with types vs unary predicates
+    objects={k + "T": [o.identifier for o in objs] for k, objs in objects.items()},
+    initial_facts=[i.to_tuple() for i in init],
+    goal=tuple_goal,
     optimizing=False,
 )
 
 problem_string = problem.to_string()
+
+grounded_problem = GroundedPddlProblem(domain, problem_string, {})
+plan = solve_pddl(grounded_problem)
+print(plan)
+
+# 4. "Feedforward TSP macroaction"
+# 5. Abstractions from goal regression
+# 6. Cleanup up demo
+#   * Fully observed pick and place
+#   * TSP macroaction
+
+# Not yet addressed:
+# * Theory / implementation for automatically determining that "explore all places" goal means that we need to run the streams
+# * reordering to achieve cup pickup during TSP execution
+# * Belief space planning for finding cup

@@ -1,9 +1,27 @@
+from __future__ import annotations
 from dataclasses import dataclass
 import copy
+from typing import Optional
+from functools import partial
 
 
 # A Restriction is something that restricts the appplicable subset of symbols
 # i.e. a type or predicate
+
+
+@dataclass
+class Environment:
+    parent_environment: Optional[Environment]
+    symbols: list
+    symbol_to_type: dict
+
+    def get_object_type(self, o):
+        # TODO: if we fail the lookup, should check parent environment?
+        if o in self.symbol_to_type:
+            return self.symbol_to_type[o]
+        else:
+            print(f"WARNING: No type for symbol {o}")
+            return None
 
 
 class Restriction:
@@ -68,34 +86,63 @@ class QuantifiedSet:
     quantifier: str  # exists or forall
     unbound_symbols: list[Symbol]
     domain: str  # TODO: what type? # Should this be called "generator"
-    element_filter: callable
-    transformation: callable
+    element_filter: callable  # x -> bool
+    transformation: callable  # x -> y
+
+
+@dataclass
+class ImproperQuantifiedSet:
+    quantifier: str  # exists or forall
+    unbound_symbols: list[Symbol]
+    domain: Optional[list]
+    element_filter: callable  # environment, x -> bool
+    transformation: callable  # environment, x -> y
 
 
 def forall(unbound_element: str, element_type_restriction: str, fact_template):
-    return QuantifiedSet(
+    if element_type_restriction is None:
+
+        def filt(env, x):
+            return True
+    elif isinstance(element_type_restriction, str):
+
+        def filt(env, x):
+            return env.get_object_type(x) == element_type_restriction
+
+    return ImproperQuantifiedSet(
         "forall",
         [unbound_element],
         None,
-        lambda x: True,
-        lambda x: Fact(fact_template.head, x),
+        filt,
+        lambda env, x: Fact(fact_template.head, [x]),
     )
 
 
-def restrict(lifted_set, symbol_to_restrict, domain):
-    lifted_set.domain = domain
-    lifted_set.unbound_symbols = [
-        s for s in lifted_set.unbound_symbols if s != symbol_to_restrict
-    ]
+def restrict(
+    env: Environment, lifted_set: ImproperQuantifiedSet, symbol_to_restrict, domain
+):
+    unbound_symbols = [s for s in lifted_set.unbound_symbols if s != symbol_to_restrict]
+
+    return QuantifiedSet(
+        lifted_set.quantifier,
+        unbound_symbols,
+        domain,
+        partial(lifted_set.element_filter, env),
+        partial(lifted_set.transformation, env),
+    )
 
 
-def push(quantified_set):
+def push(quantified_set: ImproperQuantifiedSet):
+    """forall x (visited x) -> (visited (forall x x))"""
     qs = copy.deepcopy(quantified_set)
-    qs.transformation = lambda x: x
-    return quantified_set.transformation(qs)
+    qs.transformation = lambda env, x: x
+
+    # TODO: this whole function probably needs to be parameterized by an
+    # environment which is then passed here instead of None (?)
+    return quantified_set.transformation(None, qs)
 
 
-def generate(quantified_set):
+def generate(quantified_set: QuantifiedSet):
     for e in quantified_set.domain:
         if quantified_set.element_filter(e):
             yield quantified_set.transformation(e)
@@ -182,7 +229,15 @@ goal = forall("p", "Place", Fact("visited", Symbol("p")))
 
 print(push(goal))
 
-restrict(goal, "p", ["p1", "p2", "p3"])
+env_symbols = [Symbol("p1"), Symbol("p2"), Symbol("p3")]
+env_symbol_to_type = {}
+env_symbol_to_type["p1"] = "Place"
+env_symbol_to_type["p2"] = "Place"
+env_symbol_to_type["p3"] = "Place"
+
+goal = restrict(
+    Environment(None, env_symbols, env_symbol_to_type), goal, "p", ["p1", "p2", "p3"]
+)
 
 
 for gs in generate(goal):
