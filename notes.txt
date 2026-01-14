@@ -76,3 +76,7 @@ Order of work:
     * This ability to compose "problem-grounding functions" is what gives our approach its generality.
 
 * We also need to develop our notion of stream evaluation -- there is some sort of "stream evaluation manager" that is in charge of deciding which generated scenes are relevant / calling the planner after some number of stream evaluations.
+
+* Introduce LOMDP formalism and explain why 1) it's a good fit for our problems, 2) it means we can plan in a "mostly" determinized setting.
+    * We can cite Siyi's work and explain that in theory we can leverage generative models like that, but in this work we focus on the determinized planning case
+    * The question is, is it worth presenting a probabilistic planning interpretation and showing that we plan in the (deterministic) special case, or just hint at that possibility?
