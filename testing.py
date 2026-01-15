@@ -16,10 +16,11 @@ class Environment:
     symbol_to_type: dict
 
     def get_object_type(self, o):
-        # TODO: if we fail the lookup, should check parent environment?
         if o in self.symbol_to_type:
             return self.symbol_to_type[o]
         else:
+            if self.parent_environment is not None:
+                return self.parent_environment.get_object_type(o)
             print(f"WARNING: No type for symbol {o}")
             return None
 

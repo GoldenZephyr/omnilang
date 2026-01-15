@@ -1,17 +1,13 @@
 from testing import (
-    Fact,
     Symbol,
     ground_predicate,
     ground,
     State,
-    forall,
-    Environment,
     ImproperQuantifiedSet,
     restrict,
-    generate,
+    Environment,
+    Fact,
 )
-from dsg_pddl.pddl_grounding import PddlProblem, GroundedPddlProblem, PddlDomain
-from dsg_pddl.pddl_planning import solve_pddl
 
 
 def eval_quantifier(env, quantified_expression: ImproperQuantifiedSet, state: State):
@@ -44,6 +40,15 @@ def group_objects_by_type(domain, facts):
     return type_to_objects
 
 
+def get_symbol_to_type(domain, state):
+    type_to_objects = group_objects_by_type(domain, state.facts)
+    symbol_to_type = {}
+    for k, v in type_to_objects.items():
+        for val in v:
+            symbol_to_type[val] = k
+    return symbol_to_type
+
+
 def group_facts_by_symbol(facts):
     symbol_to_facts = {}
     for f in facts:
@@ -52,6 +57,14 @@ def group_facts_by_symbol(facts):
                 symbol_to_facts[s] = []
             symbol_to_facts[s].append(f)
     return symbol_to_facts
+
+
+def get_symbols_from_facts(facts: list[Fact]):
+    symbols = set()
+    for f in facts:
+        for arg in f.body:
+            symbols.add(arg)
+    return symbols
 
 
 class SymbolMaker:
@@ -72,8 +85,9 @@ class SymbolMaker:
 
 class Stream:
     def __init__(
-        self, params, domain, formal_outputs, certificates, symbol_prefixes=None
+        self, name, params, domain, formal_outputs, certificates, symbol_prefixes=None
     ):
+        self.name = name
         self.formal_params = params  # List of symbols (formal params)
         self.domain = domain  # List of Restrictions
         self.formal_outputs = formal_outputs  # List of symbols
@@ -115,9 +129,108 @@ class Stream:
         return applicable_args
 
 
+def extract_goal_predicates(goal: ImproperQuantifiedSet):
+    # TODO: may also need to support QuantifiedSet? And State/PartialState?
+    # TODO: This will need to generalize when we consider more complicated goals
+    example_fact = goal.transformation(None, Symbol("x"))
+    return [example_fact.head]
+
+
+def find_streams_affecting_goal(streams: set[Stream], state: State, goal):
+    # first do the easy check, whether any stream outputs overlap with goal facts
+    # If this is not the case, then we can return an empty set of streams
+    # This takes care of goals where there are no relevant streams
+    # Otherwise, we do a relaxed reachability check between the initial state and the goal
+    # If this relaxed check fails, then there are no relevant streams
+    # NOTE: skipped the above, should be subsumed by check below (?)
+
+    # If the previous check succeeded, then return all streams that are on *a*
+    # path from the initial state to the goal
+    predicates_in_goal = extract_goal_predicates(goal)
+    print("preds in goal: ", predicates_in_goal)
+
+    name_to_stream = {s.name: s for s in streams}
+    direct_dependencies = {s.name: set() for s in streams}
+    direct_dependencies["goal"] = set()
+    bindable = {s.name: False for s in streams}
+
+    state_predicates = [s.head for s in state.facts]
+
+    for s in streams:
+        stream_domain_predicates = {f.head for f in s.domain}
+        unsatisfied_predicates = {f.head for f in s.domain}
+        for dp in stream_domain_predicates:
+            if dp in state_predicates:
+                unsatisfied_predicates.remove(dp)
+
+        for t in streams:
+            output_predicates = [f.head for f in t.certificates]
+            for op in output_predicates:
+                if op in stream_domain_predicates:
+                    direct_dependencies[s.name].add(t.name)
+
+        if len(unsatisfied_predicates) == 0:
+            bindable[s.name] = True
+
+    # check which streams the goal depends on *directly*
+    for t in streams:
+        # TODO: feed in domain
+        domain = None
+        symbol_to_type = get_symbol_to_type(domain, State(t.certificates))
+        print(f"Stream {t.name} output types: {symbol_to_type}")
+        # TODO: parent env
+        child_env = Environment(None, t.formal_outputs, symbol_to_type)
+
+        # TODO: handle streams with multiple outputs
+        if goal.element_filter(child_env, Symbol(t.formal_outputs[0])):
+            direct_dependencies["goal"].add(t.name)
+
+    # Now, we want all satisfied streams that are backwards-reachable from goal
+    expanded = True
+    reachable_stream_set = direct_dependencies["goal"]
+    while expanded:
+        expanded = False
+        for s in reachable_stream_set:
+            for t in direct_dependencies[s]:
+                if not bindable[t]:
+                    continue
+                if t in reachable_stream_set:
+                    continue
+                reachable_stream_set.add(t)
+                expanded = True
+
+    return set(name_to_stream[s] for s in reachable_stream_set)
+
+
 def add_facts_to_state(facts, state):
-    # TODO: check for duplicates?
+    # TODO: Deal with duplicates and negations?
     return State(state.facts + facts)
+
+
+def expand_streams(env, streams, state):
+    # compose (\circ) streams (in the order given) to state
+    # Actually, this is not exactly \circ, because here we apply each stream as
+    # many times as possible at the current depth before moving on to the next
+    # stream
+
+    # TODO: also need to return *new environment*
+    new_symbols = []
+    new_symbols_to_type = {}
+    for s in streams:
+        symbol_to_facts = group_facts_by_symbol(state.facts)
+        applicable_args = s.get_applicable_args(symbol_to_facts)
+        for a in applicable_args:
+            ns, new_facts = s.apply(a)
+
+            domain = None
+            new_symbols_to_type |= get_symbol_to_type(domain, State(new_facts))
+
+            state = add_facts_to_state(new_facts, state)
+            new_symbols = new_symbols + ns
+
+    new_env = Environment(env, new_symbols, new_symbols_to_type)
+
+    return new_env, state
 
 
 def apply_transitive_frontier_rule(facts):
@@ -150,121 +263,3 @@ def apply_rules(facts):
     # want to apply rule e.g. (connected p1 f1) (connected f1 p2) -> (connected p1 p2)
     # TODO: generalize...
     apply_transitive_frontier_rule(facts)
-
-
-# A.) A stream representing "there might be a place next to a frontier"
-S = Stream(
-    [Symbol("?f")],
-    [Fact("frontier", [Symbol("?f")])],
-    ["?place"],
-    [
-        Fact("place", [Symbol("?place")]),
-        Fact("connected", [Symbol("?f"), Symbol("?place")]),
-    ],
-    symbol_prefixes=["pred"],
-)
-
-original_symbols = [Symbol("f1"), Symbol("f2"), Symbol("o1"), Symbol("p1")]
-
-facts = [
-    Fact("frontier", [Symbol("f1")]),
-    Fact("frontier", [Symbol("f2")]),
-    Fact("place", [Symbol("p1")]),
-    Fact("obj", [Symbol("o1")]),
-    Fact("connected", [Symbol("f1"), Symbol("p1")]),
-    Fact("connected", [Symbol("f2"), Symbol("p1")]),
-]
-state = State(facts)
-
-SymbolMaker.key_to_index["p"] = 2
-
-# symbols, new_facts = S.apply(facts[0])
-symbols, new_facts = S.apply(["f1"])
-print("Symbols from stream: ", symbols)
-
-
-symbol_to_facts = group_facts_by_symbol(facts)
-
-applicable_args = S.get_applicable_args(symbol_to_facts)
-print("Applicable args: ", applicable_args)
-print("Looping:")
-symbols = original_symbols
-for a in applicable_args:
-    new_symbols, new_facts = S.apply(a)
-    # print("Symbols from stream: ", symbols)
-    # new_state = add_facts_to_state(new_facts, state)
-    state = add_facts_to_state(new_facts, state)
-    symbols = symbols + new_symbols
-
-    # print("New state: ", new_state)
-    # print("Symbols: ", symbols)
-    # for f in new_state.facts:
-    #    print(f)
-
-for f in state.facts:
-    print(f)
-
-
-# B.) A rule that says "if frontier F is connected to both A and B, then A is connected to B
-# This is necessary if we want to be able to apply a previously-constructed
-# exploration domain to a new representation with frontiers.
-
-apply_rules(state.facts)
-
-print("Final facts:\n")
-for f in state.facts:
-    print(f)
-
-print("Final symbols: ")
-print(symbols)
-
-objects = group_objects_by_type(None, state.facts)
-init = state.facts
-goal = forall("p", "place", Fact("visited", [Symbol("p")]))
-
-type_to_objects = group_objects_by_type(None, state.facts)
-symbol_to_type = {}
-for k, v in type_to_objects.items():
-    for val in v:
-        symbol_to_type[val] = k
-env = Environment(None, symbols, symbol_to_type)
-
-evaled_goal = eval_quantifier(env, goal, state.facts)
-print("evaled goal: ", evaled_goal)
-print("Constituent facts: ")
-for g in generate(evaled_goal):
-    print(g)
-
-init.append(Fact("at", [Symbol("p1")]))
-init.append(Fact("visited", [Symbol("p1")]))
-
-tuple_goal = ("and",) + tuple(a.to_tuple() for a in generate(evaled_goal))
-with open("test_domain.pddl", "r") as fo:
-    domain = PddlDomain(fo.read())
-
-problem = PddlProblem(
-    name="test_explore",
-    domain="exploration_test",
-    # TODO: "T" is temporary until we properly deal with types vs unary predicates
-    objects={k + "T": [o.identifier for o in objs] for k, objs in objects.items()},
-    initial_facts=[i.to_tuple() for i in init],
-    goal=tuple_goal,
-    optimizing=False,
-)
-
-problem_string = problem.to_string()
-
-grounded_problem = GroundedPddlProblem(domain, problem_string, {})
-plan = solve_pddl(grounded_problem)
-print(plan)
-
-# 4. "Feedforward TSP macroaction"
-# 5. Abstractions from goal regression
-# 6. Cleanup up demo
-#   * Fully observed pick and place
-#   * TSP macroaction
-
-# Not yet addressed:
-# * Theory / implementation for automatically determining that "explore all places" goal means that we need to run the streams
-# * reordering to achieve cup pickup during TSP execution
-# * Belief space planning for finding cup
