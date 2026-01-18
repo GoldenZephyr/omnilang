@@ -103,7 +103,7 @@ class StreamTransformer(Transformer):
         return items[0]
 
 
-def parse_stream_file(fn):
+def parse_stream_file(fn) -> list[Stream]:
     with as_file(files(omnilang).joinpath("streams.lark")) as path:
         with open(path, "r") as fo:
             stream_grammar = fo.read()

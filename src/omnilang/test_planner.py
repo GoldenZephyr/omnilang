@@ -28,6 +28,7 @@ import copy
 
 from omnilang.rules import apply_rules
 from dataclasses import dataclass
+import math  # noqa
 
 
 class FullDomain:
@@ -42,17 +43,19 @@ class Problem:
     goal: PartialState
 
 
-def load_full_domain(pddl_domain_path: str, stream_path: str):
+def load_full_domain(
+    pddl_domain_path: str, stream_path: str, stream_functions: dict[str, callable] = {}
+):
     streams = parse_stream_file(stream_path)
+    for s in streams:
+        if s.name in stream_functions:
+            s.metadata_generator = stream_functions[s.name]
     pddl_domain = parse_domain_file(pddl_domain_path)
     return FullDomain(pddl_domain, streams)
 
 
 def dsg_to_problem(G, initial_place, include_object_connections=False):
     facts = []
-
-    # for n in G.get_layer(spark_dsg.DsgLayers.TRAVERSABILITY).nodes:
-    #    facts.append(Fact("place", [Symbol(n.id.str())]))
 
     for n in G.get_layer(spark_dsg.DsgLayers.OBJECTS).nodes:
         facts.append(Fact("obj", [Symbol(n.id.str())]))
@@ -90,7 +93,9 @@ def dsg_to_problem(G, initial_place, include_object_connections=False):
     return State(facts)
 
 
-def get_problem_for_goal(domain: FullDomain, planning_representation, goal):
+def get_problem_for_goal(
+    domain: FullDomain, planning_representation, goal, base_env=None
+):
     relevant_streams = find_streams_affecting_goal(
         domain.streams, planning_representation, goal
     )
@@ -98,10 +103,12 @@ def get_problem_for_goal(domain: FullDomain, planning_representation, goal):
     generated_s0 = copy.deepcopy(planning_representation)
     generated_symbols = get_symbols_from_facts(planning_representation.facts)
     symbol_to_type = get_symbol_to_type(None, planning_representation)
-    generated_env = Environment(None, generated_symbols, symbol_to_type)
+    generated_env = Environment(base_env, generated_symbols, symbol_to_type)
 
     # Expand state until the goal is no longer true in the initial state
     max_depth = 10
+    stream_evals_per_level = math.inf
+    # stream_evals_per_level = 1
     for depth in range(max_depth):
         # restrict goal, check if goal in s0
         if isinstance(goal, ImproperQuantifiedSet):
@@ -113,8 +120,17 @@ def get_problem_for_goal(domain: FullDomain, planning_representation, goal):
             )  # TODO: support negative goal conditions
         if explicit_goal not in generated_s0:
             break
+
+        print(
+            "generated_env positions: ",
+            generated_env.get_symbols_with_metadata("position"),
+        )
+        print("expanding relevant streams: ", [s.name for s in relevant_streams])
         generated_env, generated_s0 = expand_streams(
-            generated_env, relevant_streams, generated_s0
+            generated_env,
+            relevant_streams,
+            generated_s0,
+            stream_evals_per_level=stream_evals_per_level,
         )
 
     apply_rules(generated_s0.facts)
@@ -123,7 +139,7 @@ def get_problem_for_goal(domain: FullDomain, planning_representation, goal):
     else:
         evaled_goal = goal
 
-    return Problem(generated_s0, evaled_goal)
+    return generated_env, Problem(generated_s0, evaled_goal)
 
 
 if __name__ == "__main__":
@@ -144,7 +160,7 @@ if __name__ == "__main__":
     pddl_domain_path = "test_domain.pddl"
     domain = load_full_domain(pddl_domain_path, stream_path)
 
-    problem = get_problem_for_goal(domain, planning_representation, goal)
+    env, problem = get_problem_for_goal(domain, planning_representation, goal)
 
     plan = solve(domain.pddl_domain, problem.initial_state, problem.goal)
 
@@ -152,5 +168,5 @@ if __name__ == "__main__":
     rep2 = dsg_to_problem(G, "t0", include_object_connections=True)
     rep2.facts.append(Fact("hand-free", []))
     goal2 = PartialState({Fact("obj-at", [Symbol("o1"), Symbol("t0")])}, set())
-    problem2 = get_problem_for_goal(domain2, rep2, goal2)
+    env2, problem2 = get_problem_for_goal(domain2, rep2, goal2)
     plan2 = solve(domain2.pddl_domain, problem2.initial_state, problem2.goal)

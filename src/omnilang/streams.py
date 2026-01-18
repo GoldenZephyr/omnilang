@@ -11,6 +11,7 @@ from omnilang.mdp_states import (
     PartialState,
 )
 from plum import dispatch
+from math import inf
 
 
 def eval_quantifier(env, quantified_expression: ImproperQuantifiedSet, state: State):
@@ -89,7 +90,14 @@ class SymbolMaker:
 
 class Stream:
     def __init__(
-        self, name, params, domain, formal_outputs, certificates, symbol_prefixes=None
+        self,
+        name,
+        params,
+        domain,
+        formal_outputs,
+        certificates,
+        symbol_prefixes=None,
+        metadata_generator=None,
     ):
         self.name = name
         self.formal_params = params  # List of symbols (formal params)
@@ -102,7 +110,9 @@ class Stream:
             assert len(symbol_prefixes) == len(self.formal_outputs)
             self.symbol_prefixes = symbol_prefixes
 
-    def apply(self, args):
+        self.metadata_generator = metadata_generator
+
+    def apply(self, args, environment=None):
         assert len(args) == len(self.formal_params)
 
         grounded_outputs = [SymbolMaker.get_identifier(p) for p in self.symbol_prefixes]
@@ -110,7 +120,27 @@ class Stream:
         for o, a in zip(self.formal_params, args):
             remapping[o] = a
         grounded_facts = [ground_predicate(c, remapping) for c in self.certificates]
-        return grounded_outputs, grounded_facts
+        metadata = self.generate_metadata(environment, args, grounded_outputs)
+
+        return grounded_outputs, grounded_facts, metadata
+
+    def generate_metadata(self, environment, inputs, output_args):
+        print(
+            "generate_metadata symbols with position: ",
+            environment.get_symbols_with_metadata("position"),
+        )
+        print("generated_metadata g0: ", environment.get_metadata_for_symbol("g0"))
+        if self.metadata_generator is not None:
+            if environment is not None:
+                print("getting metadata for inputs: ", inputs)
+                metadata = self.metadata_generator(
+                    *[environment.get_metadata_for_symbol(s.identifier) for s in inputs]
+                )
+            else:
+                metadata = self.metadata_generator(*[{} for s in inputs])
+        else:
+            metadata = [{} for _ in output_args]
+        return {k: v for k, v in zip(output_args, metadata)}
 
     def get_applicable_args(self, symbols_to_facts):
         applicable_args = []
@@ -230,28 +260,36 @@ def add_facts_to_state(facts, state):
     return State(state.facts + facts)
 
 
-def expand_streams(env, streams, state):
+def expand_streams(env, streams, state, stream_evals_per_level=inf):
     # compose (\circ) streams (in the order given) to state
     # Actually, this is not exactly \circ, because here we apply each stream as
     # many times as possible at the current depth before moving on to the next
     # stream
 
-    # TODO: also need to return *new environment*
     new_symbols = []
     new_symbols_to_type = {}
+    new_symbol_metadata = []
     for s in streams:
         symbol_to_facts = group_facts_by_symbol(state.facts)
         applicable_args = s.get_applicable_args(symbol_to_facts)
-        for a in applicable_args:
-            ns, new_facts = s.apply(a)
+        for idx, a in enumerate(applicable_args):
+            # NOTE: implications for passing base env to all streams (vs. "incrementally" updated env)
+            ns, new_facts, symbol_metadata = s.apply(a, environment=env)
+            new_symbol_metadata.append(symbol_metadata)
 
             domain = None
             new_symbols_to_type |= get_symbol_to_type(domain, State(new_facts))
 
             state = add_facts_to_state(new_facts, state)
             new_symbols = new_symbols + ns
+            if idx >= stream_evals_per_level:
+                break
 
     new_env = Environment(env, new_symbols, new_symbols_to_type)
+    print("new symbol metadata: ", new_symbol_metadata)
+    for nsm in new_symbol_metadata:
+        for s, m in nsm.items():
+            new_env.attach_metadata(s.identifier, m)
 
     return new_env, state
 

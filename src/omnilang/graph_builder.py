@@ -48,11 +48,11 @@ def build_test_dsg():
     obj1 = spark_dsg.ObjectNodeAttributes()
     obj1.position = np.array([-1.5, 0, 0])
     obj1.semantic_label = 34  # box
-    G.add_node(spark_dsg.DsgLayers.OBJECTS, spark_dsg.NodeSymbol("o", 0).value, obj1)
+    G.add_node(spark_dsg.DsgLayers.OBJECTS, spark_dsg.NodeSymbol("O", 0).value, obj1)
     obj2 = spark_dsg.PlaceNodeAttributes()
     obj2.position = np.array([1.5, 0.1, 0])
     obj2.semantic_label = 15  # rock
-    G.add_node(spark_dsg.DsgLayers.OBJECTS, spark_dsg.NodeSymbol("o", 1).value, obj2)
+    G.add_node(spark_dsg.DsgLayers.OBJECTS, spark_dsg.NodeSymbol("O", 1).value, obj2)
 
     G.insert_edge(
         spark_dsg.NodeSymbol("R", 0).value, spark_dsg.NodeSymbol("p", 0).value
@@ -64,10 +64,10 @@ def build_test_dsg():
         spark_dsg.NodeSymbol("p", 0).value, spark_dsg.NodeSymbol("p", 1).value
     )
     G.insert_edge(
-        spark_dsg.NodeSymbol("t", 0).value, spark_dsg.NodeSymbol("o", 0).value
+        spark_dsg.NodeSymbol("t", 0).value, spark_dsg.NodeSymbol("O", 0).value
     )
     G.insert_edge(
-        spark_dsg.NodeSymbol("t", 1).value, spark_dsg.NodeSymbol("o", 1).value
+        spark_dsg.NodeSymbol("t", 1).value, spark_dsg.NodeSymbol("O", 1).value
     )
     G.insert_edge(
         spark_dsg.NodeSymbol("t", 0).value, spark_dsg.NodeSymbol("t", 1).value
