@@ -1,4 +1,5 @@
-from testing import (
+# ruff: noqa: F811
+from omnilang.mdp_states import (
     Symbol,
     ground_predicate,
     ground,
@@ -7,7 +8,9 @@ from testing import (
     restrict,
     Environment,
     Fact,
+    PartialState,
 )
+from plum import dispatch
 
 
 def eval_quantifier(env, quantified_expression: ImproperQuantifiedSet, state: State):
@@ -36,7 +39,8 @@ def group_objects_by_type(domain, facts):
         if f.head in types:
             if f.head not in type_to_objects:
                 type_to_objects[f.head] = []
-            type_to_objects[f.head].append(f.body[0])
+            if f.body[0] not in type_to_objects[f.head]:
+                type_to_objects[f.head].append(f.body[0])
     return type_to_objects
 
 
@@ -129,11 +133,30 @@ class Stream:
         return applicable_args
 
 
+@dispatch
+def extract_goal_predicates(goal: PartialState):
+    positive_heads = [f.head for f in goal.positive_facts]
+    negative_heads = [f.head for f in goal.negative_facts]
+    return positive_heads + negative_heads
+
+
+@dispatch
 def extract_goal_predicates(goal: ImproperQuantifiedSet):
     # TODO: may also need to support QuantifiedSet? And State/PartialState?
     # TODO: This will need to generalize when we consider more complicated goals
     example_fact = goal.transformation(None, Symbol("x"))
     return [example_fact.head]
+
+
+@dispatch
+def does_goal_depend_on(goal: ImproperQuantifiedSet, env, symbol):
+    return goal.element_filter(env, symbol)
+
+
+@dispatch
+def does_goal_depend_on(goal: PartialState, env, symbol):
+    goal_symbols = get_symbols_from_facts(goal.positive_facts | goal.negative_facts)
+    return symbol in goal_symbols
 
 
 def find_streams_affecting_goal(streams: set[Stream], state: State, goal):
@@ -182,7 +205,7 @@ def find_streams_affecting_goal(streams: set[Stream], state: State, goal):
         child_env = Environment(None, t.formal_outputs, symbol_to_type)
 
         # TODO: handle streams with multiple outputs
-        if goal.element_filter(child_env, Symbol(t.formal_outputs[0])):
+        if does_goal_depend_on(goal, child_env, Symbol(t.formal_outputs[0])):
             direct_dependencies["goal"].add(t.name)
 
     # Now, we want all satisfied streams that are backwards-reachable from goal

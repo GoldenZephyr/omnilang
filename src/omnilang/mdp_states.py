@@ -1,12 +1,10 @@
+# ruff: noqa: F811
 from __future__ import annotations
 from dataclasses import dataclass
 import copy
 from typing import Optional
 from functools import partial
-
-
-# A Restriction is something that restricts the appplicable subset of symbols
-# i.e. a type or predicate
+from plum import dispatch
 
 
 @dataclass
@@ -51,6 +49,12 @@ class Symbol:
 
 
 @dataclass
+class TypedSymbol:
+    identifier: str
+    type: str
+
+
+@dataclass
 class SymbolGenerator:
     identifier: str
     restrictions: list[Restriction]
@@ -71,6 +75,39 @@ class Fact:
         if isinstance(other, Fact):
             return hash(self) == hash(other)
         return NotImplemented
+
+    def to_pddl_string(self):
+        return f"({self.head + " " + ' '.join([p.identifier for p in self.body])})"
+
+
+@dataclass(frozen=True)
+class NegatedFact:
+    head: str
+    body: list[Symbol | SymbolGenerator]
+
+    def to_tuple(self):
+        return (self.head, *[b.identifier for b in self.body])
+
+    def __hash__(self):
+        return hash(self.to_tuple())
+
+    def __eq__(self, other):
+        if isinstance(other, Fact):
+            return hash(self) == hash(other)
+        return NotImplemented
+
+    def to_pddl_string(self):
+        return f"(not {negate(self).to_pddl_string()})"
+
+
+@dispatch
+def negate(fact: Fact):
+    return NegatedFact(fact.head, fact.body)
+
+
+@dispatch
+def negate(fact: NegatedFact):
+    return Fact(fact.head, fact.body)
 
 
 @dataclass
@@ -115,9 +152,6 @@ class StateGenerator:
     # (TODO: really instead of Predicate we should have Clause, which might be a combination of Predicates)
 
     states: list[State | Predicate]
-
-
-# { g(x) | x \in S s.t. f(x) }
 
 
 @dataclass
@@ -188,25 +222,6 @@ def generate(quantified_set: QuantifiedSet):
             yield quantified_set.transformation(e)
 
 
-@dataclass
-class LiftedAction:
-    name: str
-    params: list[Symbol]
-    param_restrictions: list[list[Restriction]]
-    # TODO: I *think* that lifted actions should be thought of having ungrounded facts which are actually slightly different from predicates? And in that case, I'm not sure there's actually a distinction between Lifted and GroundedActions?
-    precondition: PartialState
-    positive_effect: list[Predicate]
-    negative_effect: list[Predicate]
-
-
-@dataclass
-class GroundedAction:
-    name: str
-    precondition: list[Fact]
-    positive_effect: list[Fact]
-    negative_effect: list[Fact]
-
-
 def satisfies(s, r):
     # TODO: use types to improve grounding efficiency
     return True
@@ -230,154 +245,3 @@ def ground(restrictions: list[list[Restriction]], symbols):
 
 def ground_predicate(predicate, binding):
     return Fact(predicate.head, [binding[s] for s in predicate.body])
-
-
-def bind_action(a, bindings):
-    # NOTE: currently we only support positive preconditions (...)
-    grounded_precondition = PartialState(
-        [ground_predicate(p, bindings) for p in a.precondition], {}
-    )
-    grounded_positive_effects = [
-        ground_predicate(p, bindings) for p in a.positive_effect
-    ]
-    grounded_negative_effects = [
-        ground_predicate(p, bindings) for p in a.negative_effect
-    ]
-    return GroundedAction(
-        a.name,
-        grounded_precondition,
-        grounded_positive_effects,
-        grounded_negative_effects,
-    )
-
-
-def ground_actions(actions: list[LiftedAction], symbols):
-    # NOTE: probably need more information passed in to ensure that we can prevent binding symbols that don't meet the action restrictions
-
-    for a in actions:
-        r = {f: None for f in a.params}
-        for bindings in ground(a.param_restrictions, symbols):
-            for formal, val in zip(a.params, bindings):
-                r[formal] = val
-
-            ga = bind_action(a, r)
-            yield ga
-
-
-def compute_preimage(state, action):
-    # Compute the preimage such that action(preimage) -> state
-
-    # 1. Bind (lifted) effects to state
-    # 2. evaluate preconditions for that value of formal parameters
-    # 3. Add those preconditions to state, remove the effects from the state
-    pass
-
-
-goal = forall("p", "Place", Fact("visited", Symbol("p")))
-
-print(push(goal))
-
-env_symbols = [Symbol("p1"), Symbol("p2"), Symbol("p3")]
-env_symbol_to_type = {}
-env_symbol_to_type["p1"] = "Place"
-env_symbol_to_type["p2"] = "Place"
-env_symbol_to_type["p3"] = "Place"
-
-goal = restrict(
-    Environment(None, env_symbols, env_symbol_to_type), goal, "p", ["p1", "p2", "p3"]
-)
-
-
-for gs in generate(goal):
-    print(gs)
-
-
-move = LiftedAction(
-    "move",
-    ["?p1", "?p2"],
-    [[], []],
-    [Fact("at", ["?p1"])],
-    [Fact("at", ["?p2"])],
-    [Fact("at", ["?p1"])],
-)
-
-actions = [move]
-symbols = ["p1", "p2"]
-for a in ground_actions(actions, symbols):
-    print(a)
-
-
-def update_state(state: State, added_facts: list[Fact], deleted_facts: list[Fact]):
-    new_state = State({s for s in state.facts})
-    for af in added_facts:
-        new_state.add_fact(af)
-    for df in deleted_facts:
-        new_state.remove_fact(df)
-    return new_state
-
-
-def update_partial_state(
-    state: PartialState, added_facts: list[Fact], deleted_facts: list[Fact]
-):
-    pass
-
-
-def iterate_neighbors(actions, symbols, state):
-    for a in ground_actions(actions, symbols):
-        # 1. Filter for applicable actions (TODO: we can add some logic that lets us greatly reduce the size of ground_actions)
-        if a.precondition in state:
-            # 2. Apply action
-            new_state = update_state(state, a.positive_effect, a.negative_effect)
-            yield a, new_state
-
-
-s0 = State(
-    [
-        Fact("at", [Symbol("p1")]),
-        Fact("connected", [Symbol("p1"), Symbol("p2")]),
-        Fact("connected", [Symbol("p2"), Symbol("p3")]),
-    ]
-)
-print("Possible s1: ")
-for a, n in iterate_neighbors(actions, env_symbols, s0):
-    print("Action: ", a, " Next state: ", n)
-
-
-def forward_search(actions, symbols, s0, goal, max_depth=3):
-    def search(max_depth, state, current_depth):
-        if current_depth == max_depth:
-            return None
-        for action, neighbor in iterate_neighbors(actions, symbols, state):
-            if goal in neighbor:
-                return [action]
-
-            rest = search(max_depth, neighbor, current_depth + 1)
-            if rest is not None:
-                return [action] + rest
-
-    # Iterative deepening
-    for md in range(1, max_depth):
-        result = search(md, s0, 0)
-        if result is not None:
-            return result
-    # failed to plan at max depth
-
-
-move_real = LiftedAction(
-    "move",
-    ["?p1", "?p2"],
-    [[], []],
-    [Fact("at", ["?p1"]), Fact("connected", ["?p1", "?p2"])],
-    [Fact("at", ["?p2"])],
-    [Fact("at", ["?p1"])],
-)
-
-test_goal = PartialState({Fact("at", [Symbol("p3")])}, {})
-plan = forward_search([move_real], env_symbols, s0, test_goal)
-print("Plan: ", plan)
-
-
-# 1. forward search -- DONE
-# 2. action inversion
-#    * In general an action has ~2^N inverses where N is the number of action effects. (every effect can be inverted or left unchanged)
-# 3. "goal state" check is true when the search state matches the problem's intial state, *or a "pure abstraction" of the initial state*

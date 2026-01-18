@@ -1,0 +1,42 @@
+?start: domain
+
+domain: "(" "define" "(" "domain" NAME ")" domain_body ")"
+
+domain_body: types? functions? predicates action+
+
+types: "(" ":types" type_decl+ ")"
+type_decl: NAME+ "-" NAME
+
+functions: "(" ":functions" function_decl* ")"
+function_decl: "(" NAME taggable_var* ")"
+
+predicates: "(" ":predicates" predicate_def+ ")"
+predicate_def: "(" NAME taggable_var* ")"
+
+action: "(" ":action" NAME parameters precondition effect ")"
+
+parameters: ":parameters" "(" taggable_var+ ")"
+
+precondition: ":precondition" formula
+effect: ":effect" formula
+
+?formula: atom
+        | "(" "and" formula+ ")" -> conjunction
+        | "(" "not" formula ")" -> negation
+
+atom: "(" NAME term* ")"
+
+term: var | NAME
+var: "?" NAME
+
+taggable_var: var | typed_var
+typed_var: var "-" NAME
+
+NAME: /[a-zA-Z_][a-zA-Z0-9_-]*/
+
+COMMENT: ";" /[^\n]*/ NEWLINE
+
+%import common.WS
+%import common.NEWLINE
+%ignore WS
+%ignore COMMENT
