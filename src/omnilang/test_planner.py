@@ -51,9 +51,6 @@ def load_full_domain(pddl_domain_path: str, stream_path: str):
 def dsg_to_problem(G, initial_place, include_object_connections=False):
     facts = []
 
-    # for n in G.get_layer(spark_dsg.DsgLayers.TRAVERSABILITY).nodes:
-    #    facts.append(Fact("place", [Symbol(n.id.str())]))
-
     for n in G.get_layer(spark_dsg.DsgLayers.OBJECTS).nodes:
         facts.append(Fact("obj", [Symbol(n.id.str())]))
 

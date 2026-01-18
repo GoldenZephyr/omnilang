@@ -89,7 +89,14 @@ class SymbolMaker:
 
 class Stream:
     def __init__(
-        self, name, params, domain, formal_outputs, certificates, symbol_prefixes=None
+        self,
+        name,
+        params,
+        domain,
+        formal_outputs,
+        certificates,
+        symbol_prefixes=None,
+        metadata_generator=None,
     ):
         self.name = name
         self.formal_params = params  # List of symbols (formal params)
@@ -102,7 +109,9 @@ class Stream:
             assert len(symbol_prefixes) == len(self.formal_outputs)
             self.symbol_prefixes = symbol_prefixes
 
-    def apply(self, args):
+        self.metadata_generator = metadata_generator
+
+    def apply(self, args, environment=None):
         assert len(args) == len(self.formal_params)
 
         grounded_outputs = [SymbolMaker.get_identifier(p) for p in self.symbol_prefixes]
@@ -110,7 +119,21 @@ class Stream:
         for o, a in zip(self.formal_params, args):
             remapping[o] = a
         grounded_facts = [ground_predicate(c, remapping) for c in self.certificates]
-        return grounded_outputs, grounded_facts
+        metadata = self.generate_metadata(environment, args, grounded_outputs)
+
+        return grounded_outputs, grounded_facts, metadata
+
+    def generate_metadata(self, environment, inputs, output_args):
+        if self.metadata_generator is not None:
+            if environment is not None:
+                metadata = self.metadata_generator(
+                    *[environment.get_metadata_for_symbol(s) for s in inputs]
+                )
+            else:
+                metadata = self.metadata_generator(*[{} for s in inputs])
+        else:
+            metadata = [{} for _ in output_args]
+        return {k: v for k, v in zip(output_args, metadata)}
 
     def get_applicable_args(self, symbols_to_facts):
         applicable_args = []
@@ -236,14 +259,15 @@ def expand_streams(env, streams, state):
     # many times as possible at the current depth before moving on to the next
     # stream
 
-    # TODO: also need to return *new environment*
     new_symbols = []
     new_symbols_to_type = {}
+    new_symbol_metadata = []
     for s in streams:
         symbol_to_facts = group_facts_by_symbol(state.facts)
         applicable_args = s.get_applicable_args(symbol_to_facts)
         for a in applicable_args:
-            ns, new_facts = s.apply(a)
+            ns, new_facts, symbol_metadata = s.apply(a)
+            new_symbol_metadata.append(symbol_metadata)
 
             domain = None
             new_symbols_to_type |= get_symbol_to_type(domain, State(new_facts))
@@ -252,6 +276,7 @@ def expand_streams(env, streams, state):
             new_symbols = new_symbols + ns
 
     new_env = Environment(env, new_symbols, new_symbols_to_type)
+    new_env.attach_metadata(new_symbol_metadata)
 
     return new_env, state
 

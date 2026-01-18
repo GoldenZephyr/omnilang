@@ -2,7 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import copy
-from typing import Optional
+from typing import Optional, Any
 from functools import partial
 from plum import dispatch
 
@@ -13,6 +13,10 @@ class Environment:
     symbols: list
     symbol_to_type: dict
 
+    def __post_init__(self):
+        self.symbol_to_metadata = {}
+        self.metadata_to_symbols = {}
+
     def get_object_type(self, o):
         if o in self.symbol_to_type:
             return self.symbol_to_type[o]
@@ -21,6 +25,31 @@ class Environment:
                 return self.parent_environment.get_object_type(o)
             print(f"WARNING: No type for symbol {o}")
             return None
+
+    def attach_metadata(self, symbol_metadata: list[dict[Symbol, dict[str, Any]]]):
+        for metadata in symbol_metadata:
+            for symbol, symbol_data in metadata.items():
+                self.symbol_to_metadata[symbol] = symbol_data
+                for metadata_type, metadata_value in symbol_data.items():
+                    if metadata_type not in self.metadata_to_symbols:
+                        self.metadata_to_symbols[metadata_type] = []
+                    self.metadata_to_symbols[metadata_type] = metadata_value
+
+    def get_symbols_with_metadata(self, metadata_type: str):
+        if self.parent_environment is not None:
+            parent_metadata = self.parent_environment.get_symbols_with_metadata(
+                metadata_type
+            )
+        else:
+            parent_metadata = []
+        return self.metadata_to_symbols[metadata_type] + parent_metadata
+
+    def get_metadata_for_symbol(self, symbol):
+        if symbol in self.symbols:
+            return self.symbol_to_metadata[symbol]
+        if self.parent_environment is not None:
+            return self.parent_environment.get_metadata_for_symbol(symbol)
+        return None
 
 
 class Restriction:
@@ -77,7 +106,7 @@ class Fact:
         return NotImplemented
 
     def to_pddl_string(self):
-        return f"({self.head + " " + ' '.join([p.identifier for p in self.body])})"
+        return f"({self.head + ' ' + ' '.join([p.identifier for p in self.body])})"
 
 
 @dataclass(frozen=True)
