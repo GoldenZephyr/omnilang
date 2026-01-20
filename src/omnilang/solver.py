@@ -1,14 +1,16 @@
 # ruff: noqa: F811
-from omnilang.mdp_states import generate, QuantifiedSet, PartialState, negate
+from omnilang.mdp_states import (
+    generate,
+    QuantifiedSet,
+    PartialState,
+    negate,
+    Environment,
+)
 from dsg_pddl.pddl_planning import solve_pddl
 from dsg_pddl.pddl_grounding import PddlProblem, GroundedPddlProblem, PddlDomain
 from omnilang.streams import group_objects_by_type
 from plum import dispatch
-
-
-# @dispatch
-# def to_pddl_facts(goal: QuantifiedSet):
-#    return tuple(a.to_tuple() for a in generate(goal))
+from omnilang.test_planner import expand_streams
 
 
 @dispatch
@@ -33,14 +35,37 @@ def to_pddl_goal(goal: PartialState):
     return ("and",) + positives + negatives
 
 
-# @dispatch
-# def to_pddl_facts(goal: PartialState):
-#    return tuple(f.to_tuple() for f in goal.positive_facts) + tuple(
-#        negate(f).to_tuple() for f in goal.negative_facts
-#    )
+def solve_existential(
+    env: Environment,
+    domain: PddlDomain,
+    initial_state,
+    goal: QuantifiedSet,
+):
+    max_depth = 5
+    for extra_depth in range(max_depth):
+        plan = solve(domain, initial_state, goal)
+        if plan is not None:
+            break
+        env, initial_state = expand_streams(env, domain.streams, initial_state)
+        print("Solving failed with existential quantifier. Trying higher stream depth!")
+        for f in initial_state.facts:
+            print(f)
+    return env, plan
 
 
-def solve(domain: PddlDomain, initial_state, goal: PartialState):
+def modal_solve(
+    env: Environment,
+    domain: PddlDomain,
+    initial_state,
+    goal: PartialState | QuantifiedSet,
+):
+    if isinstance(goal, QuantifiedSet) and goal.quantifier == "exists":
+        return solve_existential(env, domain, initial_state, goal)
+
+    return env, solve(domain, initial_state, goal)
+
+
+def solve(domain: PddlDomain, initial_state, goal: PartialState | QuantifiedSet):
     # tuple_goal = ("and",) + to_pddl_facts(goal)
     tuple_goal = to_pddl_goal(goal)
     objects = group_objects_by_type(domain, initial_state.facts)

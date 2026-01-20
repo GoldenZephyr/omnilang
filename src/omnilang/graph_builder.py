@@ -173,7 +173,7 @@ def build_expanded_test_dsg():
         )
 
     food = spark_dsg.ObjectNodeAttributes()
-    food.position = np.array([7, 0.1, 0])
+    food.position = np.array([7, 0.3, 0])
     food.semantic_label = 46  # food
     G.add_node(spark_dsg.DsgLayers.OBJECTS, spark_dsg.NodeSymbol("O", 99).value, food)
 

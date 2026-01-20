@@ -301,7 +301,6 @@ def find_streams_affecting_goal(streams: set[Stream], state: State, goal):
                     continue
                 new_reachable_streams.add(t)
 
-    # streams = [name_to_stream[s] for s in reachable_stream_set]
     return set(name_to_stream[s] for s in reachable_stream_set)
 
 

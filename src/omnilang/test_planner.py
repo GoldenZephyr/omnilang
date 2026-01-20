@@ -97,6 +97,41 @@ def dsg_to_problem(G, initial_place, include_object_connections=False):
     return State(facts)
 
 
+def generate_bindable_world(
+    domain: FullDomain, env: Environment, state: State, goal: ImproperQuantifiedSet
+):
+    print("\n\ngenerating bindable world")
+    assert goal.quantifier == "exists"
+    relevant_streams = find_streams_affecting_goal(domain.streams, state, goal)
+    print("relevant streams: ", relevant_streams)
+    generated_s0 = copy.deepcopy(state)
+    generated_symbols = get_symbols_from_facts(state.facts)
+    symbol_to_type = get_symbol_to_type(None, state)
+    generated_env = Environment(env, generated_symbols, symbol_to_type)
+
+    max_depth = 10
+    stream_evals_per_level = math.inf
+    # stream_evals_per_level = 1
+    for depth in range(max_depth):
+        # restrict goal, check if goal in s0
+        evaled_goal = eval_quantifier(generated_env, goal, generated_s0)
+        explicit_goal = [g for g in generate(evaled_goal)]
+        if len(explicit_goal) > 0:
+            break
+
+        generated_env, generated_s0 = expand_streams(
+            generated_env,
+            relevant_streams,
+            generated_s0,
+            stream_evals_per_level=stream_evals_per_level,
+        )
+    print("depth: ", depth)
+
+    print("explicit goal: ", explicit_goal)
+    print("\n\n===")
+    return generated_env, generated_s0
+
+
 def generate_unsatisfying_consistent_world(
     domain: FullDomain, env: Environment, state: State, goal: ImproperQuantifiedSet
 ):
@@ -141,8 +176,8 @@ def get_problem_for_goal(
             # For an existential quantifier, we need to generate at least
             # enough to bind the goal to *something*, but we can't know if we
             # have generated far enough until we find a plan
-            raise Exception(
-                "Haven't implemented generation for existential quantifiers yet"
+            generated_env, generated_s0 = generate_bindable_world(
+                domain, base_env, planning_representation, goal
             )
         else:
             raise Exception(f"Unknown quantifier type {goal.quantifier}")
