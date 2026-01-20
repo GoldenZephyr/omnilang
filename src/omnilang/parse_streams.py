@@ -2,7 +2,7 @@ from lark import Lark, Transformer
 from importlib.resources import as_file, files
 import omnilang
 from omnilang.streams import Stream
-from omnilang.mdp_states import Fact, Symbol
+from omnilang.mdp_states import Fact, Symbol, NegatedFact, negate
 
 
 class StreamTransformer(Transformer):
@@ -87,6 +87,20 @@ class StreamTransformer(Transformer):
         return str(token)
 
     # ---------- AND handling ----------
+
+    def negation(self, items):
+        expression = items[0]
+        if len(expression) > 1:
+            raise ValueError("Currently you can only negate an atomic Fact")
+        match expression[0]:
+            case Fact():
+                return negate(expression[0])
+            case NegatedFact():
+                return negate(expression[0])
+            case _:
+                raise ValueError(
+                    f"Currently you can only negate facts, not formulas (tried to negate {expression[0]}"
+                )
 
     def and_expr(self, items):
         result = []

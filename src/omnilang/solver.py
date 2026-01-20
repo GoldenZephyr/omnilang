@@ -6,20 +6,43 @@ from omnilang.streams import group_objects_by_type
 from plum import dispatch
 
 
-@dispatch
-def to_pddl_facts(goal: QuantifiedSet):
-    return tuple(a.to_tuple() for a in generate(goal))
+# @dispatch
+# def to_pddl_facts(goal: QuantifiedSet):
+#    return tuple(a.to_tuple() for a in generate(goal))
 
 
 @dispatch
-def to_pddl_facts(goal: PartialState):
-    return tuple(f.to_tuple() for f in goal.positive_facts) + tuple(
-        negate(f).to_tuple() for f in goal.negative_facts
-    )
+def to_pddl_goal(goal: QuantifiedSet):
+    facts = tuple(a.to_tuple() for a in generate(goal))
+    print("facts:", facts)
+    print("\n\n")
+    match goal.quantifier:
+        case "exists":
+            junction = "or"
+        case "forall":
+            junction = "and"
+        case _:
+            raise ValueError(f"Unknown goal quantifier {goal.quantifier}")
+    return (junction,) + facts
+
+
+@dispatch
+def to_pddl_goal(goal: PartialState):
+    positives = tuple(f.to_tuple() for f in goal.positive_facts)
+    negatives = tuple(negate(f).to_tuple() for f in goal.negative_facts)
+    return ("and",) + positives + negatives
+
+
+# @dispatch
+# def to_pddl_facts(goal: PartialState):
+#    return tuple(f.to_tuple() for f in goal.positive_facts) + tuple(
+#        negate(f).to_tuple() for f in goal.negative_facts
+#    )
 
 
 def solve(domain: PddlDomain, initial_state, goal: PartialState):
-    tuple_goal = ("and",) + to_pddl_facts(goal)
+    # tuple_goal = ("and",) + to_pddl_facts(goal)
+    tuple_goal = to_pddl_goal(goal)
     objects = group_objects_by_type(domain, initial_state.facts)
     print("objects by type: ")
     print(objects)

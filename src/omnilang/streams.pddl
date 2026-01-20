@@ -11,8 +11,8 @@
   :certified (and (place ?p) (connected ?f ?p)))
 
 
-(:stream dummy-frontier-generator
-  :inputs (?o)
-  :domain (objet ?o)
-  :outputs (?f)
-  :certified (and (frontier ?f) (connected ?o ?f)))
+;(:stream dummy-frontier-generator
+;  :inputs (?o)
+;  :domain (objet ?o)
+;  :outputs (?f)
+;  :certified (and (frontier ?f) (connected ?o ?f)))

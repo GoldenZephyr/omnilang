@@ -24,7 +24,7 @@ def apply_transitive_frontier_rule(facts):
             f2, o2 = frontier_other_from_connected(c2)
             if f1 == f2 and o1 != o2:
                 new_connection = Fact("connected", [o1, o2])
-                facts.append(new_connection)
+                facts.add(new_connection)
 
 
 def apply_rules(facts):

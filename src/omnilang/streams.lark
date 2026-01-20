@@ -19,6 +19,7 @@ var_list: "(" variable+ ")"
 
 logical_expr: predicate
             | "(" "and" logical_expr+ ")" -> and_expr
+            | "(" "not" logical_expr ")" -> negation
 
 predicate: "(" NAME term* ")"
 

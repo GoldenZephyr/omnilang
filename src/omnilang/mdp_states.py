@@ -70,7 +70,7 @@ class Environment:
                 metadata_type
             )
         else:
-            parent_metadata = []
+            parent_metadata = set()
         return self.metadata_to_symbols.get(metadata_type, set()) | parent_metadata
 
     def get_metadata_for_symbol(self, symbol):
@@ -260,6 +260,34 @@ def forall(unbound_element: str, element_type_restriction: str, fact_template):
     )
 
 
+def exists(unbound_element: str, element_type_restriction: str, fact_template):
+    if element_type_restriction is None:
+
+        def filt(env, x):
+            return True
+    elif isinstance(element_type_restriction, str):
+
+        def filt(env, x):
+            return env.get_object_type(x) == element_type_restriction
+
+    def fill_in_fact(env, x):  # TODO: probably need this for forall too
+        parms = []
+        for p in fact_template.body:
+            if p.identifier == unbound_element:
+                parms.append(x)
+            else:
+                parms.append(p)
+        return Fact(fact_template.head, parms)
+
+    return ImproperQuantifiedSet(
+        "exists",
+        [unbound_element],
+        None,
+        filt,
+        fill_in_fact,
+    )
+
+
 def restrict(
     env: Environment, lifted_set: ImproperQuantifiedSet, symbol_to_restrict, domain
 ):
@@ -312,4 +340,11 @@ def ground(restrictions: list[list[Restriction]], symbols):
 
 
 def ground_predicate(predicate, binding):
-    return Fact(predicate.head, [binding[s] for s in predicate.body])
+    match predicate:
+        case Fact():
+            constructor = Fact
+        case NegatedFact():
+            constructor = NegatedFact
+        case _:
+            constructor = Fact
+    return constructor(predicate.head, [binding[s] for s in predicate.body])

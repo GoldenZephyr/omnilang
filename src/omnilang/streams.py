@@ -8,10 +8,13 @@ from omnilang.mdp_states import (
     restrict,
     Environment,
     Fact,
+    NegatedFact,
     PartialState,
+    negate,
 )
 from plum import dispatch
 from math import inf
+from dataclasses import dataclass
 
 
 def eval_quantifier(env, quantified_expression: ImproperQuantifiedSet, state: State):
@@ -30,7 +33,7 @@ def eval_quantifier(env, quantified_expression: ImproperQuantifiedSet, state: St
 def get_pddl_types(domain):
     # For these purposes, a type is a unary predicate that isn't present in any action effects
     # Or, I guess maybe we just read the type section from the domain?
-    return ["place", "frontier", "obj"]
+    return ["place", "frontier", "obj", "food", "mold"]
 
 
 def group_objects_by_type(domain, facts):
@@ -88,6 +91,24 @@ class SymbolMaker:
         return Symbol(identifier)
 
 
+@dispatch
+def consistent_with(f: Fact, current_facts: list[Fact]):
+    return f in current_facts
+
+
+@dispatch
+def consistent_with(f: NegatedFact, current_facts: list[Fact]):
+    return negate(f) not in current_facts
+
+
+@dataclass(frozen=True)
+class GroundedStream:
+    name: str
+    inputs: tuple[Symbol]
+    output_symbols: tuple[Symbol]
+    output_facts: tuple[Fact]
+
+
 class Stream:
     def __init__(
         self,
@@ -112,17 +133,28 @@ class Stream:
 
         self.metadata_generator = metadata_generator
 
-    def apply(self, args, environment=None):
+    def apply(self, args, environment=None, grounded_outputs=None):
+        """grounded_outputs can be passed as an input if it's necessary to make
+        the stream's output be consistent across multiple applications, e.g.,
+        when reapplying a stream to an updated base environment"""
+
         assert len(args) == len(self.formal_params)
 
-        grounded_outputs = [SymbolMaker.get_identifier(p) for p in self.symbol_prefixes]
+        if grounded_outputs is None:
+            grounded_outputs = [
+                SymbolMaker.get_identifier(p) for p in self.symbol_prefixes
+            ]
+
         remapping = {o: g for o, g in zip(self.formal_outputs, grounded_outputs)}
         for o, a in zip(self.formal_params, args):
             remapping[o] = a
         grounded_facts = [ground_predicate(c, remapping) for c in self.certificates]
         metadata = self.generate_metadata(environment, args, grounded_outputs)
 
-        return grounded_outputs, grounded_facts, metadata
+        return GroundedStream(
+            self.name, tuple(args), tuple(grounded_outputs), tuple(grounded_facts)
+        ), metadata
+        # return grounded_outputs, grounded_facts, metadata
 
     def generate_metadata(self, environment, inputs, output_args):
         print(
@@ -142,24 +174,50 @@ class Stream:
             metadata = [{} for _ in output_args]
         return {k: v for k, v in zip(output_args, metadata)}
 
+    def is_applicable(self, args, symbols_to_facts):
+        current_facts = []
+        for s in args:
+            if s in symbols_to_facts:
+                for f in symbols_to_facts[s]:
+                    current_facts.append(f)
+        print("current_facts", current_facts)
+        satisfied = True
+        r = {f: None for f in self.formal_params}
+        for formal, val in zip(self.formal_params, args):
+            r[formal] = val
+        grounded_domain = [ground_predicate(d, r) for d in self.domain]
+        for d in grounded_domain:
+            print("checking consistency for :", d)
+            if not consistent_with(d, current_facts):
+                satisfied = False
+                break
+
+        return satisfied
+
     def get_applicable_args(self, symbols_to_facts):
+        print("\nGetting applicable args for ", self.name)
         applicable_args = []
         for bindings in ground([[]], symbols_to_facts.keys()):
+            print("checking bindings ", bindings)
             current_facts = []
             for s in bindings:
                 for f in symbols_to_facts[s]:
                     current_facts.append(f)
+            print("current_facts", current_facts)
             satisfied = True
             r = {f: None for f in self.formal_params}
             for formal, val in zip(self.formal_params, bindings):
                 r[formal] = val
             grounded_domain = [ground_predicate(d, r) for d in self.domain]
             for d in grounded_domain:
-                if d not in current_facts:
+                print("checking consistency for :", d)
+                if not consistent_with(d, current_facts):
                     satisfied = False
                     break
             if satisfied:
+                print("Added binding ", bindings)
                 applicable_args.append(bindings)
+        print("Final applicable args: ", applicable_args)
         return applicable_args
 
 
@@ -190,15 +248,6 @@ def does_goal_depend_on(goal: PartialState, env, symbol):
 
 
 def find_streams_affecting_goal(streams: set[Stream], state: State, goal):
-    # first do the easy check, whether any stream outputs overlap with goal facts
-    # If this is not the case, then we can return an empty set of streams
-    # This takes care of goals where there are no relevant streams
-    # Otherwise, we do a relaxed reachability check between the initial state and the goal
-    # If this relaxed check fails, then there are no relevant streams
-    # NOTE: skipped the above, should be subsumed by check below (?)
-
-    # If the previous check succeeded, then return all streams that are on *a*
-    # path from the initial state to the goal
     predicates_in_goal = extract_goal_predicates(goal)
     print("preds in goal: ", predicates_in_goal)
 
@@ -239,25 +288,26 @@ def find_streams_affecting_goal(streams: set[Stream], state: State, goal):
             direct_dependencies["goal"].add(t.name)
 
     # Now, we want all satisfied streams that are backwards-reachable from goal
-    expanded = True
-    reachable_stream_set = direct_dependencies["goal"]
-    while expanded:
-        expanded = False
+    new_reachable_streams = direct_dependencies["goal"]
+    reachable_stream_set = set()
+    while len(new_reachable_streams) > 0:
+        reachable_stream_set |= new_reachable_streams
+        new_reachable_streams = set()
         for s in reachable_stream_set:
             for t in direct_dependencies[s]:
                 if not bindable[t]:
                     continue
-                if t in reachable_stream_set:
+                if t in reachable_stream_set or t in new_reachable_streams:
                     continue
-                reachable_stream_set.add(t)
-                expanded = True
+                new_reachable_streams.add(t)
 
+    # streams = [name_to_stream[s] for s in reachable_stream_set]
     return set(name_to_stream[s] for s in reachable_stream_set)
 
 
 def add_facts_to_state(facts, state):
     # TODO: Deal with duplicates and negations?
-    return State(state.facts + facts)
+    return State(state.facts | set(facts))
 
 
 def expand_streams(env, streams, state, stream_evals_per_level=inf):
@@ -266,7 +316,7 @@ def expand_streams(env, streams, state, stream_evals_per_level=inf):
     # many times as possible at the current depth before moving on to the next
     # stream
 
-    new_symbols = []
+    new_symbols = ()
     new_symbols_to_type = {}
     new_symbol_metadata = []
     for s in streams:
@@ -274,7 +324,14 @@ def expand_streams(env, streams, state, stream_evals_per_level=inf):
         applicable_args = s.get_applicable_args(symbol_to_facts)
         for idx, a in enumerate(applicable_args):
             # NOTE: implications for passing base env to all streams (vs. "incrementally" updated env)
-            ns, new_facts, symbol_metadata = s.apply(a, environment=env)
+            print(f"Applying stream {s.name} with args:", a)
+            grounded_stream, symbol_metadata = s.apply(a, environment=env)
+
+            ns = grounded_stream.output_symbols
+            new_facts = grounded_stream.output_facts
+            for m in symbol_metadata.values():
+                m["generator"] = grounded_stream
+
             new_symbol_metadata.append(symbol_metadata)
 
             domain = None
