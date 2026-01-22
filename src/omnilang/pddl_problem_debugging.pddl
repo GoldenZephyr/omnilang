@@ -1,20 +1,23 @@
 (define (problem test_explore)
-        (:domain exploration_test)
+        (:domain move_abstraction)
         (:objects
-o0 o1 - objT
-f0 - frontierT
-t0 t1 - placeT
+o1 - objT
+p1 p2 - placeT
+q1 - splaceT
+f2 f1 - frontierT
 )
         (:init
- (obj o0)
-(obj o1)
-(frontier f0)
-(connected f0 t1)
-(place t0)
-(connected t0 t1)
-(place t1)
-(connected t1 t0)
-(at t0)
-(visited t0) )
-        (:goal (and (visited t1) (visited t0)))
+ (obj o1)
+(connected p2 p1)
+(place p1)
+(connected f1 p1)
+(connected f2 p1)
+(splace q1)
+(frontier f2)
+(connected p1 p2)
+(place p2)
+(frontier f1)
+(at p1)
+(visited p1) )
+        (:goal (and (observed q1)))
         )

@@ -75,14 +75,25 @@ class DomainTransformer(Transformer):
         restrictions = [p[1] for p in parameters]
         positive_effects = []
         negative_effects = []
-        for f in effects:
-            match f:
-                case Fact():
-                    positive_effects.append(f)
-                case NegatedFact():
-                    negative_effects.append(negate(f))
-                case _:
-                    raise Exception(f"Unknown action effect type {f})")
+        match effects:
+            case tuple() | list():
+                for f in effects:
+                    match f:
+                        case Fact():
+                            positive_effects.append(f)
+                        case NegatedFact():
+                            negative_effects.append(negate(f))
+                        case _:
+                            raise Exception(f"Unknown action effect type {f})")
+            case Fact():
+                positive_effects.append(effects)
+            case NegatedFact():
+                negative_effects.append(effects)
+            case _:
+                raise ValueError(
+                    f"Unexpected effect type {type(effects)} for {effects}"
+                )
+
         return "action", LiftedAction(
             name, params, restrictions, precondition, positive_effects, negative_effects
         )

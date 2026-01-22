@@ -106,6 +106,9 @@ class Predicate:
 class Symbol:
     identifier: str
 
+    def __str__(self):
+        return f"sym-{self.identifier}"
+
     def __hash__(self):
         return hash(self.identifier)
 
@@ -147,6 +150,9 @@ class Fact:
     def to_pddl_string(self):
         return f"({self.head + ' ' + ' '.join([p.identifier for p in self.body])})"
 
+    def __str__(self):
+        return f"({self.head} {' '.join(str(b) for b in self.body)})"
+
 
 @dataclass(frozen=True)
 class NegatedFact:
@@ -183,6 +189,9 @@ class State:
     facts: set[Fact]
     # implicitly assume facts that aren't listed are False
 
+    def __str__(self):
+        return f'State({", ".join(str(f) for f in self.facts)})'
+
     def add_fact(self, fact):
         self.facts.add(fact)
 
@@ -212,6 +221,10 @@ class PartialState:
     # When propagating a set of states through an action, we need to separately track unknown facts and negative facts
     positive_facts: set[Fact]
     negative_facts: set[Fact]
+
+    def __str__(self):
+        return f"PartialState({' '.join([str(f) for f in self.positive_facts]
+                + [str(negate(f)) for f in self.negative_facts])})"
 
 
 @dataclass
@@ -302,6 +315,7 @@ def restrict(
     )
 
 
+@dispatch
 def push(quantified_set: ImproperQuantifiedSet):
     """forall x (visited x) -> (visited (forall x x))"""
     qs = copy.deepcopy(quantified_set)
@@ -310,6 +324,15 @@ def push(quantified_set: ImproperQuantifiedSet):
     # TODO: this whole function probably needs to be parameterized by an
     # environment which is then passed here instead of None (?)
     return quantified_set.transformation(None, qs)
+
+
+@dispatch
+def push(quantified_set: QuantifiedSet):
+    """forall x (visited x) -> (visited (forall x x))"""
+    qs = copy.deepcopy(quantified_set)
+    qs.transformation = lambda x: x
+
+    return quantified_set.transformation(qs)
 
 
 def generate(quantified_set: QuantifiedSet):
@@ -347,4 +370,4 @@ def ground_predicate(predicate, binding):
             constructor = NegatedFact
         case _:
             constructor = Fact
-    return constructor(predicate.head, [binding[s] for s in predicate.body])
+    return constructor(predicate.head, [binding.get(s, s) for s in predicate.body])

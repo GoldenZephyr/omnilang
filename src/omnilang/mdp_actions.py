@@ -5,6 +5,7 @@ from omnilang.mdp_states import (
     Symbol,
     Fact,
     NegatedFact,
+    negate,
     ground_predicate,
     ground,
 )
@@ -27,6 +28,9 @@ class LiftedAction:
     )
     positive_effect: list[Fact]
     negative_effect: list[Fact]
+
+    def __str__(self):
+        return f"{self.name}({self.params}): {' '.join(str(f) for f in self.precondition)} --> {' '.join(str(f) for f in self.positive_effect)}, NOT({' '.join(str(f) for f in self.negative_effect)})"
 
     def to_pddl_lines(self):
         lines = []
@@ -88,6 +92,16 @@ class GroundedAction:
     positive_effect: list[Fact]
     negative_effect: list[Fact]
 
+    def __str__(self):
+        if isinstance(self.precondition, list):
+            precondition_str = " ".join(str(f) for f in self.precondition)
+        else:
+            precondition_str = " ".join(
+                [str(f) for f in self.precondition.positive_facts]
+                + [str(negate(f)) for f in self.precondition.negative_facts]
+            )
+        return f"{self.name}: {precondition_str} --> {' '.join(str(f) for f in self.positive_effect)}, NOT({' '.join(str(f) for f in self.negative_effect)})"
+
 
 def bind_action(a, bindings):
     # NOTE: currently we only support positive preconditions (...)
@@ -109,7 +123,7 @@ def bind_action(a, bindings):
 
 
 def ground_actions(actions: list[LiftedAction], symbols):
-    # NOTE: probably need more information passed in to ensure that we can prevent binding symbols tha    t don't meet the action restrictions
+    # NOTE: probably need more information passed in to ensure that we can prevent binding symbols that don't meet the action restrictions
 
     for a in actions:
         r = {f: None for f in a.params}

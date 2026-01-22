@@ -33,7 +33,7 @@ def eval_quantifier(env, quantified_expression: ImproperQuantifiedSet, state: St
 def get_pddl_types(domain):
     # For these purposes, a type is a unary predicate that isn't present in any action effects
     # Or, I guess maybe we just read the type section from the domain?
-    return ["place", "frontier", "obj", "food", "mold"]
+    return ["place", "frontier", "obj", "food", "mold", "splace"]
 
 
 def group_objects_by_type(domain, facts):
