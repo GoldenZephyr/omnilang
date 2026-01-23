@@ -16,7 +16,7 @@ from omnilang.mdp_actions import LiftedAction, ground_actions, GroundedAction
 from omnilang.mdp_search import iterate_neighbors, forward_search
 from parse_mdp import parse_domain_file
 from omnilang.test_planner import load_full_domain, get_problem_for_goal
-from omnilang.solver import solve
+from omnilang.solver import solve, attempt_push_optimization
 
 
 def can_produce(env: Environment, action: LiftedAction, fact: Fact) -> bool:
@@ -158,33 +158,11 @@ def relaxed_backward_search(
     return True, all_facts
 
 
-def attempt_push_optimization(env: Environment, goal):
-    pushed_goal = push(goal)
-    set_symbol = Symbol("q1")
-    set_def = pushed_goal.body[0]
-    pushed_goal.body[0] = set_symbol
-
-    env_opt = Environment(env, [set_symbol], {set_symbol: "splace"}) # 
-
-    env_opt.attach_metadata(set_symbol, {"set_definition": set_def})
-
-    # 1. Add splace fact
-
-    # NOTE: in simplest case, we don't even need the goal regression?  Goal
-    # regression should help with some combination of 1) actions preconditions
-    # that we need to bind to these sets and 2) understanding when abstracting
-    # the goal won't be feasible?
-
-    # success, reachable_facts = relaxed_backward_search(
-    #    set(), env2, domain, s0, State(set([pushed_goal]))
-    # )
-
-
 domain = parse_domain_file("move_abstraction.pddl")
 print("Loaded domain: ")
 print(domain)
 
-goal = forall("p", "Place", Fact("observed", Symbol("p")))
+goal = forall("p", "place", Fact("observed", Symbol("p")))
 
 print(push(goal))
 
@@ -227,31 +205,34 @@ goal_state = State(set([Fact("observed", [Symbol("p2")])]))
 env = Environment(None, env_symbols, env_symbol_to_type)
 success, reachable_facts = relaxed_backward_search(set(), env, domain, s0, goal_state)
 
-pushed_goal = push(goal2)
-set_symbol = Symbol("q1")
-set_def = pushed_goal.body[0]
-pushed_goal.body[0] = set_symbol
+# pushed_goal = push(goal2)
+# set_symbol = Symbol("q1")
+# set_def = pushed_goal.body[0]
+# pushed_goal.body[0] = set_symbol
+#
+# env2 = Environment(env, [set_symbol], {set_symbol: "splace"})
+# env2.attach_metadata(set_symbol, {"set_definition": set_def})
 
-env2 = Environment(env, [set_symbol], {set_symbol: "splace"})
-env2.attach_metadata(set_symbol, {"set_definition": set_def})
-
-
-success2, reachable_facts2 = relaxed_backward_search(
-    set(), env2, domain, s0, State(set([pushed_goal]))
-)
+# success2, reachable_facts2 = relaxed_backward_search(
+#    set(), env2, domain, s0, State(set([pushed_goal]))
+# )
 
 stream_path = "streams.pddl"
 pddl_domain_path = "move_abstraction.pddl"
 domain = load_full_domain(pddl_domain_path, stream_path)
 
+
 planning_env, problem = get_problem_for_goal(
     domain,
     s0,
-    PartialState(set([pushed_goal]), set()),
-    base_env=env2,
+    goal,
+    base_env=env,
 )
 
-plan = solve(domain.pddl_domain, problem.initial_state, problem.goal)
+final_env, updated_problem = attempt_push_optimization(planning_env, problem)
+
+# plan = solve(domain.pddl_domain, problem.initial_state, problem.goal)
+plan = solve(domain.pddl_domain, updated_problem.initial_state, updated_problem.goal)
 
 abc
 

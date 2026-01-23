@@ -80,3 +80,16 @@ Order of work:
 * Introduce LOMDP formalism and explain why 1) it's a good fit for our problems, 2) it means we can plan in a "mostly" determinized setting.
     * We can cite Siyi's work and explain that in theory we can leverage generative models like that, but in this work we focus on the determinized planning case
     * The question is, is it worth presenting a probabilistic planning interpretation and showing that we plan in the (deterministic) special case, or just hint at that possibility?
+
+
+---
+1/22/2026
+
+* Nominally have exploration working, although it's a little slow. Not sure why, I think due to domain preprocessing
+
+* The next steps are to:
+    * 0) Profile to understand poor scalability
+    * 1) example of unknown-object pick and place
+    * 2) generalize typing of automatic-abstraction symbols
+    * 3) ROS-ifying
+    * 4)
