@@ -28,6 +28,8 @@ def apply_transitive_frontier_rule(facts):
             if f1 == f2 and o1 != o2:
                 new_connection = Fact("connected", [o1, o2])
                 facts.add(new_connection)
+                new_connection = Fact("connected", [o2, o1])
+                facts.add(new_connection)
 
 
 def apply_rules(facts):

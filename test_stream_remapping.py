@@ -4,7 +4,7 @@ from omnilang.streams import (
     expand_streams,
     GroundedStream,
 )
-from typing import Callable
+from typing import Callable, Optional
 
 from omnilang.stream_tracking import get_streams_for_symbol, reapply_streams
 
@@ -15,7 +15,7 @@ def compute_remapped_generated_symbols(
     new_env: Environment,
     old_env: Environment,
     old_symbols: list[Symbol],
-    symbol_remapper: Callable[[Symbol], Symbol],
+    symbol_remapper: Callable[[Symbol], Optional[Symbol]],
 ):
     # (old_symbol, old_heritage) -> (new_symbol, new_heritage)
     def remap(old_symbol) -> tuple[Symbol, tuple]:

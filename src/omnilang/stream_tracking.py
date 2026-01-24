@@ -10,6 +10,22 @@ from typing import Callable
 import copy
 
 
+def get_symbol_deps(env, symbol):
+    heritage = get_symbol_heritage(env, symbol)
+
+    def flatten_heritage(h):
+        if h[1] is None:
+            return set()
+        dependencies = set()
+        for d in h[1][1]:
+            dependencies.add(d[0])
+            deps = flatten_heritage(d)
+            dependencies.update(deps)
+        return dependencies
+
+    return flatten_heritage(heritage)
+
+
 def get_symbol_heritage(env, symbol):
     def get_heritage(s):
         m = env.get_metadata_for_symbol(s)
