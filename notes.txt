@@ -88,7 +88,8 @@ Order of work:
 * Nominally have exploration working, although it's a little slow. Not sure why, I think due to domain preprocessing
 
 * The next steps are to:
-    * 0) Profile to understand poor scalability
+    * 0) Profile to understand poor scalability -- Fixed, the extra transitive frontier connections were naive /slow.
+    * 0.5) Fix remapping/using previous plan for refined plans
     * 1) example of unknown-object pick and place
     * 2) generalize typing of automatic-abstraction symbols
     * 3) ROS-ifying

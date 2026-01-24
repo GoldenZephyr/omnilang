@@ -3,9 +3,7 @@ from omnilang.mdp_states import Fact
 
 def apply_transitive_frontier_rule(facts):
     connected_facts = [f for f in facts if f.head == "connected"]
-    print("connected facts: ", connected_facts)
-    frontiers = [f.body[0] for f in facts if f.head == "frontier"]
-    print("frontiers: ", frontiers)
+    frontiers = set([f.body[0] for f in facts if f.head == "frontier"])
 
     def frontier_other_from_connected(fact):
         arg1_frontier = fact.body[0] in frontiers
@@ -18,10 +16,15 @@ def apply_transitive_frontier_rule(facts):
             return fact.body[1], fact.body[0]
         return None, None
 
-    for c1 in connected_facts:
-        f1, o1 = frontier_other_from_connected(c1)
-        for c2 in connected_facts:
-            f2, o2 = frontier_other_from_connected(c2)
+    frontier_connections = []
+    for cf in connected_facts:
+        frontier_other = frontier_other_from_connected(cf)
+        frontier_connections.append(frontier_other)
+
+    for idx in range(len(frontier_connections)):
+        f1, o1 = frontier_connections[idx]
+        for jdx in range(idx + 1, len(frontier_connections)):
+            f2, o2 = frontier_connections[jdx]
             if f1 == f2 and o1 != o2:
                 new_connection = Fact("connected", [o1, o2])
                 facts.add(new_connection)
