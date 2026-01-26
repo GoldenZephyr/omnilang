@@ -89,8 +89,8 @@ Order of work:
 
 * The next steps are to:
     * 0) Profile to understand poor scalability -- Fixed, the extra transitive frontier connections were naive /slow.
-    * 0.5) Fix remapping/using previous plan for refined plans
-    * 1) example of unknown-object pick and place
+    * 0.5) Fix remapping/using previous plan for refined plans -- Fixed, at least for now
+    * 1) example of faster unknown-object pick and place
     * 2) generalize typing of automatic-abstraction symbols
     * 3) ROS-ifying
     * 4)

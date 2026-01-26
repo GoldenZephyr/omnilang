@@ -31,6 +31,11 @@
         :precondition (and (splace ?places))
         :effect (observed ?places))
 
+    (:action find-obj
+        :parameters (?o ?p ?places)
+        :precondition (and (obj-at ?o ?p) (contains ?places ?p) (observed ?places))
+        :effect (at ?p))
+
     ;(:action pick
     ;    :parameters (?o ?p)
     ;    :precondition (and (at ?p) (obj-at ?o ?p) (hand-free))

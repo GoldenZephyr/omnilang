@@ -21,8 +21,6 @@ from omnilang.test_planner import Problem
 @dispatch
 def to_pddl_goal(goal: QuantifiedSet):
     facts = tuple(a.to_tuple() for a in generate(goal))
-    print("facts:", facts)
-    print("\n\n")
     match goal.quantifier:
         case "exists":
             junction = "or"
@@ -99,7 +97,10 @@ def modal_solve(
         final_env, updated_problem = attempt_push_optimization(
             env, Problem(initial_state, goal)
         )
-        plan = solve(domain, updated_problem.initial_state, updated_problem.goal)
+        try:
+            plan = solve(domain, updated_problem.initial_state, updated_problem.goal)
+        except Exception:
+            plan = None
 
         if plan is not None:
             return final_env, plan
@@ -112,11 +113,8 @@ def modal_solve(
 
 
 def solve(domain: PddlDomain, initial_state, goal: PartialState | QuantifiedSet):
-    # tuple_goal = ("and",) + to_pddl_facts(goal)
     tuple_goal = to_pddl_goal(goal)
     objects = group_objects_by_type(domain, initial_state.facts)
-    print("objects by type: ")
-    print(objects)
     problem = PddlProblem(
         name="test_explore",
         domain=domain.name,
