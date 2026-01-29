@@ -1,21 +1,9 @@
 from importlib.resources import as_file, files
-import omnilang
+import omnilang.lark
 from omnilang.mdp_definition import PddlDomain
 from omnilang.mdp_states import Fact, NegatedFact, Symbol, TypedSymbol, negate
 from omnilang.mdp_actions import LiftedAction
 from lark import Lark, Transformer
-
-
-# @dataclass
-# class PddlDomain:
-#    name: str
-#    types: Optional[list[Predicate]]
-#    functions: Optional[list]  # NOTE: we don't support functions yet
-#    predicates: list[Predicate]
-#    actions: list[LiftedAction]
-#
-#    def to_string(self):
-#        return None
 
 
 class DomainTransformer(Transformer):
@@ -152,7 +140,7 @@ class DomainTransformer(Transformer):
 
 
 def parse_domain_file(fn):
-    with as_file(files(omnilang).joinpath("pddl_domain.lark")) as path:
+    with as_file(files(omnilang.lark).joinpath("pddl_domain.lark")) as path:
         with open(path, "r") as fo:
             stream_grammar = fo.read()
 
@@ -171,20 +159,6 @@ def parse_domain_file(fn):
 
 
 if __name__ == "__main__":
-    with open("pddl_domain.lark", "r") as fo:
-        domain_grammar = fo.read()
-
-    domain_parser = Lark(
-        domain_grammar,
-    )
-
-    # T = StreamTransformer()
-
-    # with open("streams.pddl", "r") as fo:
-    #    example_streams = fo.read()
-
-    # tree = stream_parser.parse(example_streams)
-    # output = T.transform(tree)
 
     domain = parse_domain_file("pick_domain.pddl")
     print("Domain: ")

@@ -15,7 +15,7 @@ from omnilang.mdp_states import (
 from omnilang.mdp_actions import LiftedAction, ground_actions, GroundedAction
 from omnilang.mdp_search import iterate_neighbors, forward_search
 from parse_mdp import parse_domain_file
-from omnilang.test_planner import load_full_domain, get_problem_for_goal
+from omnilang.construct_problem import load_full_domain, get_problem_for_goal
 from omnilang.solver import solve, attempt_push_optimization
 
 

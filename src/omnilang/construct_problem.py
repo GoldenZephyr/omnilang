@@ -14,16 +14,16 @@ from omnilang.mdp_states import (
     State,
     Fact,
     Symbol,
-    Environment,
-    generate,
     PartialState,
     ImproperQuantifiedSet,
 )
+from omnilang.environment import Environment
+from omnilang.mdp_state_operations import generate
 import copy
 
 from omnilang.rules import apply_rules
 from dataclasses import dataclass
-import math  # noqa
+import math
 
 
 class FullDomain:
@@ -53,7 +53,6 @@ def dsg_to_problem(G, initial_place, include_object_connections=False):
     facts = set()
 
     special_object_categories = ["food"]
-    print("\n\n")
     for n in G.get_layer(spark_dsg.DsgLayers.OBJECTS).nodes:
         node_layer = n.layer.layer
         node_partition = n.layer.partition
@@ -62,7 +61,6 @@ def dsg_to_problem(G, initial_place, include_object_connections=False):
             facts.add(Fact(category, [Symbol(n.id.str())]))
         else:
             facts.add(Fact("obj", [Symbol(n.id.str())]))
-    print("\n\n")
 
     for n in G.get_layer(spark_dsg.DsgLayers.PLACES).nodes:
         attrs = n.attributes
@@ -100,10 +98,8 @@ def dsg_to_problem(G, initial_place, include_object_connections=False):
 def generate_bindable_world(
     domain: FullDomain, env: Environment, state: State, goal: ImproperQuantifiedSet
 ):
-    print("\n\ngenerating bindable world")
     assert goal.quantifier == "exists"
     relevant_streams = find_streams_affecting_goal(domain.streams, state, goal)
-    print("relevant streams: ", relevant_streams)
     generated_s0 = copy.deepcopy(state)
     generated_symbols = get_symbols_from_facts(state.facts)
     symbol_to_type = get_symbol_to_type(None, state)
@@ -125,10 +121,6 @@ def generate_bindable_world(
             generated_s0,
             stream_evals_per_level=stream_evals_per_level,
         )
-    print("depth: ", depth)
-
-    print("explicit goal: ", explicit_goal)
-    print("\n\n===")
     return generated_env, generated_s0
 
 
@@ -196,33 +188,3 @@ def get_problem_for_goal(
         evaled_goal = goal
 
     return generated_env, Problem(generated_s0, evaled_goal)
-
-
-# if __name__ == "__main__":
-#    G = build_test_dsg()
-#
-#    plot_layer(G.get_layer(spark_dsg.DsgLayers.TRAVERSABILITY))
-#    plot_frontiers(G)
-#    plt.show()
-#
-#    goal = forall("p", "place", Fact("visited", [Symbol("p")]))
-#
-#    planning_representation = dsg_to_problem(G, "t0")
-#    # planning_representation.facts.append(Fact("visited", [Symbol("t1")]))
-#
-#    print("initial state: ", planning_representation)
-#
-#    stream_path = "streams.pddl"
-#    pddl_domain_path = "test_domain.pddl"
-#    domain = load_full_domain(pddl_domain_path, stream_path)
-#
-#    env, problem = get_problem_for_goal(domain, planning_representation, goal)
-#
-#    plan = solve(domain.pddl_domain, problem.initial_state, problem.goal)
-#
-#    domain2 = load_full_domain("pick_domain.pddl", stream_path)
-#    rep2 = dsg_to_problem(G, "t0", include_object_connections=True)
-#    rep2.facts.append(Fact("hand-free", []))
-#    goal2 = PartialState({Fact("obj-at", [Symbol("o1"), Symbol("t0")])}, set())
-#    env2, problem2 = get_problem_for_goal(domain2, rep2, goal2)
-#    plan2 = solve(domain2.pddl_domain, problem2.initial_state, problem2.goal)

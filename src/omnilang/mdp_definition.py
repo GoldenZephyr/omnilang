@@ -31,7 +31,6 @@ class PddlDomain:
             lines += indent(1, action.to_pddl_lines())
 
         lines.append(")")
-        print("lines: ", lines)
         return "\n".join(lines)
 
     def _types_block_pddl_str(self):

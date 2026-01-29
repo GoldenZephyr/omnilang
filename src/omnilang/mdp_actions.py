@@ -6,9 +6,8 @@ from omnilang.mdp_states import (
     Fact,
     NegatedFact,
     negate,
-    ground_predicate,
-    ground,
 )
+from omnilang.mdp_state_operations import ground_predicate, ground
 from omnilang.utils import indent
 
 

@@ -1,4 +1,5 @@
-from omnilang.mdp_states import Environment, Symbol, State
+from omnilang.mdp_states import Symbol, State
+from omnilang.environment import Environment
 from omnilang.streams import (
     Stream,
     GroundedStream,

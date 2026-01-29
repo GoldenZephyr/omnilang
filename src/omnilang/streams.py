@@ -1,17 +1,15 @@
 # ruff: noqa: F811
 from omnilang.mdp_states import (
     Symbol,
-    ground_predicate,
-    ground,
     State,
     ImproperQuantifiedSet,
-    restrict,
-    Environment,
     Fact,
     NegatedFact,
     PartialState,
     negate,
 )
+from omnilang.environment import Environment
+from omnilang.mdp_state_operations import ground, ground_predicate, restrict
 from plum import dispatch
 from math import inf
 from dataclasses import dataclass
@@ -348,4 +346,3 @@ def expand_streams(env, streams, state, stream_evals_per_level=inf):
             new_env.attach_metadata(s.identifier, m)
 
     return new_env, state
-

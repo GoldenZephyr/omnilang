@@ -1,6 +1,6 @@
 from lark import Lark, Transformer
 from importlib.resources import as_file, files
-import omnilang
+import omnilang.lark
 from omnilang.streams import Stream
 from omnilang.mdp_states import Fact, Symbol, NegatedFact, negate
 
@@ -118,7 +118,7 @@ class StreamTransformer(Transformer):
 
 
 def parse_stream_file(fn) -> list[Stream]:
-    with as_file(files(omnilang).joinpath("streams.lark")) as path:
+    with as_file(files(omnilang.lark).joinpath("streams.lark")) as path:
         with open(path, "r") as fo:
             stream_grammar = fo.read()
 
@@ -137,20 +137,6 @@ def parse_stream_file(fn) -> list[Stream]:
 
 
 if __name__ == "__main__":
-    # with open("streams.lark", "r") as fo:
-    #    stream_grammar = fo.read()
-
-    # stream_parser = Lark(
-    #    stream_grammar,
-    # )
-
-    # T = StreamTransformer()
-
-    # with open("streams.pddl", "r") as fo:
-    #    example_streams = fo.read()
-
-    # tree = stream_parser.parse(example_streams)
-    # output = T.transform(tree)
 
     streams = parse_stream_file("streams.pddl")
     print("Streams: ")
