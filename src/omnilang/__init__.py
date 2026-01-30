@@ -27,3 +27,4 @@ from omnilang.construct_problem import (
     load_full_domain,
     get_problem_for_goal,
 )
+from omnilang.parse_goal import parse_goal_string

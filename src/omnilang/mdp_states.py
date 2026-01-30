@@ -196,6 +196,10 @@ def exists(unbound_element: str, element_type_restriction: str, fact_template):
 
         def filt(env, x):
             return env.get_object_type(x) == element_type_restriction
+    else:
+        raise Exception(
+            f"element_type_restriction must be string or None, not {type(element_type_restriction)}"
+        )
 
     def fill_in_fact(env, x):  # TODO: probably need this for forall too
         parms = []

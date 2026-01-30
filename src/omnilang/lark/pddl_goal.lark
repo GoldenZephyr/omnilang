@@ -1,0 +1,25 @@
+OR: "or"
+AND: "and"
+NOT: "not"
+FORALL: "forall"
+EXISTS: "exists"
+//LNAME: /[_A-Za-z](\w+|-)*/
+
+?start: element
+
+element: clause | atom | quantified_clause
+atom: "(" CNAME CNAME* ")"
+clause: conjunction | disjunction | negation
+disjunction: "(" OR element* ")"
+conjunction: "(" AND element* ")"
+negation: "(" NOT element ")"
+//quantified_clause: existential_clause | universal_clause
+quantified_clause: "(" (EXISTS | FORALL) CNAME restriction? element ")"
+//existential_clause: "(" EXISTS CNAME restriction? element ")"
+//universal_clause: "(" FORALL CNAME restriction? element ")"
+restriction: ":" element
+
+%import common.WS
+%import common.NEWLINE
+%import common.CNAME
+%ignore WS
