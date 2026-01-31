@@ -24,6 +24,9 @@ import copy
 from omnilang.rules import apply_rules
 from dataclasses import dataclass
 import math
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class FullDomain:
@@ -140,6 +143,7 @@ def generate_unsatisfying_consistent_world(
     # stream_evals_per_level = 1
     for depth in range(max_depth):
         # restrict goal, check if goal in s0
+        logger.info(f"Grounding goal to symbols: {str(generated_env.symbols)}")
         evaled_goal = eval_quantifier(generated_env, goal, generated_s0)
         explicit_goal = [g for g in generate(evaled_goal)]
 

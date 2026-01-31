@@ -3,6 +3,9 @@ from dataclasses import dataclass
 from typing import Optional, Any
 from omniplanner.omniplanner import DsgContextProvider
 import spark_dsg
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class DsgEnvironment:
@@ -30,6 +33,9 @@ class DsgEnvironment:
     def get_metadata_for_symbol(self, symbol):
         return self.dsg_context[symbol]
 
+    def get_object_type(self, o):
+        return None
+
 
 @dataclass
 class Environment:
@@ -42,6 +48,7 @@ class Environment:
         self.metadata_to_symbols = {}
 
     def get_object_type(self, o):
+        logger.info(f"Getting type for object: {o}")
         if o in self.symbol_to_type:
             return self.symbol_to_type[o]
         else:
