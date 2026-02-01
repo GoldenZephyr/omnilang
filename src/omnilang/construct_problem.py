@@ -65,15 +65,17 @@ def dsg_to_problem(G, initial_place, include_object_connections=False):
         else:
             facts.add(Fact("obj", [Symbol(n.id.str())]))
 
+    traversability_layer_key = G.get_layer_key(spark_dsg.DsgLayers.TRAVERSABILITY)
     for n in G.get_layer(spark_dsg.DsgLayers.PLACES).nodes:
         attrs = n.attributes
         if not attrs.is_predicted and not attrs.real_place:
             facts.add(Fact("frontier", [Symbol(n.id.str())]))
+            # NOTE: currently (3D) Places/Frontiers can't be connected to each other
             for m in n.connections():
-                ns = spark_dsg.NodeSymbol(m).str()
-                facts.add(Fact("connected", [Symbol(n.id.str()), Symbol(ns)]))
+                if G.get_node(m).layer == traversability_layer_key:
+                    ns = spark_dsg.NodeSymbol(m).str()
+                    facts.add(Fact("connected", [Symbol(n.id.str()), Symbol(ns)]))
 
-    traversability_layer_key = G.get_layer_key(spark_dsg.DsgLayers.TRAVERSABILITY)
     for n in G.get_layer(spark_dsg.DsgLayers.TRAVERSABILITY).nodes:
         facts.add(Fact("place", [Symbol(n.id.str())]))
         for m in n.connections():
