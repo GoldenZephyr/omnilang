@@ -36,6 +36,15 @@ class DsgEnvironment:
     def get_object_type(self, o):
         return None
 
+    def get_symbols(self) -> set:
+        symbols = set()
+        for node in self.dsg.nodes:
+            symbol = Symbol(node.id.str())
+            symbols.add(symbol)
+        for symbol, cxt in self.dsg_context.items():
+            symbols.add(Symbol(symbol))
+        return symbols
+
 
 @dataclass
 class Environment:
@@ -48,7 +57,6 @@ class Environment:
         self.metadata_to_symbols = {}
 
     def get_object_type(self, o):
-        logger.info(f"Getting type for object: {o}")
         if o in self.symbol_to_type:
             return self.symbol_to_type[o]
         else:
@@ -90,3 +98,7 @@ class Environment:
         for k, v in metadata.items():
             output[k] = v
         return output
+
+    def get_symbols(self) -> set:
+        parent_symbols = self.parent_environment.get_symbols()
+        return set(self.symbols) | parent_symbols

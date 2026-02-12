@@ -17,7 +17,7 @@ from omnilang.mdp_states import (
 )
 from omnilang.mdp_state_operations import restrict, push, generate
 from omnilang.mdp_search import update_state
-from omnilang.streams import Stream
+from omnilang.streams import Stream, get_symbols_from_facts, get_symbol_to_type
 
 from omnilang.rules import apply_rules, apply_transitive_frontier_rule
 from omnilang.solver import solve_existential, modal_solve, solve

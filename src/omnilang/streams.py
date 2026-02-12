@@ -156,15 +156,13 @@ class Stream:
 
     def generate_metadata(self, environment, inputs, output_args):
         print(
-            "generate_metadata symbols with position: ",
-            environment.get_symbols_with_metadata("position"),
+            "generated_metadata g0: ", environment.get_metadata_for_symbol(Symbol("g0"))
         )
-        print("generated_metadata g0: ", environment.get_metadata_for_symbol("g0"))
         if self.metadata_generator is not None:
             if environment is not None:
                 print("getting metadata for inputs: ", inputs)
                 metadata = self.metadata_generator(
-                    *[environment.get_metadata_for_symbol(s.identifier) for s in inputs]
+                    *[environment.get_metadata_for_symbol(s) for s in inputs]
                 )
             else:
                 metadata = self.metadata_generator(*[{} for s in inputs])
@@ -178,14 +176,12 @@ class Stream:
             if s in symbols_to_facts:
                 for f in symbols_to_facts[s]:
                     current_facts.append(f)
-        print("current_facts", current_facts)
         satisfied = True
         r = {f: None for f in self.formal_params}
         for formal, val in zip(self.formal_params, args):
             r[formal] = val
         grounded_domain = [ground_predicate(d, r) for d in self.domain]
         for d in grounded_domain:
-            print("checking consistency for :", d)
             if not consistent_with(d, current_facts):
                 satisfied = False
                 break
@@ -193,29 +189,23 @@ class Stream:
         return satisfied
 
     def get_applicable_args(self, symbols_to_facts):
-        print("\nGetting applicable args for ", self.name)
         applicable_args = []
         for bindings in ground([[]], symbols_to_facts.keys()):
-            print("checking bindings ", bindings)
             current_facts = []
             for s in bindings:
                 for f in symbols_to_facts[s]:
                     current_facts.append(f)
-            print("current_facts", current_facts)
             satisfied = True
             r = {f: None for f in self.formal_params}
             for formal, val in zip(self.formal_params, bindings):
                 r[formal] = val
             grounded_domain = [ground_predicate(d, r) for d in self.domain]
             for d in grounded_domain:
-                print("checking consistency for :", d)
                 if not consistent_with(d, current_facts):
                     satisfied = False
                     break
             if satisfied:
-                print("Added binding ", bindings)
                 applicable_args.append(bindings)
-        print("Final applicable args: ", applicable_args)
         return applicable_args
 
 
@@ -340,7 +330,6 @@ def expand_streams(env, streams, state, stream_evals_per_level=inf):
                 break
 
     new_env = Environment(env, new_symbols, new_symbols_to_type)
-    print("new symbol metadata: ", new_symbol_metadata)
     for nsm in new_symbol_metadata:
         for s, m in nsm.items():
             new_env.attach_metadata(s.identifier, m)
