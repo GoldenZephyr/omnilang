@@ -1,6 +1,5 @@
 # ruff: noqa: F811
 from __future__ import annotations
-import copy
 from functools import partial
 from plum import dispatch
 from omnilang.mdp_states import (
@@ -24,27 +23,45 @@ def restrict(
         domain,
         partial(lifted_set.element_filter, env),
         partial(lifted_set.transformation, env),
+        base_improper_quantified_set=lifted_set,
     )
 
 
 @dispatch
-def push(quantified_set: ImproperQuantifiedSet):
+def push(qs: ImproperQuantifiedSet):
     """forall x (visited x) -> (visited (forall x x))"""
-    qs = copy.deepcopy(quantified_set)
-    qs.transformation = lambda env, x: x
+    # qs = copy.deepcopy(quantified_set)
+    # qs = quantified_set
+    # qs.transformation = lambda env, x: x
 
-    # TODO: this whole function probably needs to be parameterized by an
-    # environment which is then passed here instead of None (?)
-    return quantified_set.transformation(None, qs)
+    quantified_set = ImproperQuantifiedSet(
+        qs.quantifier,
+        qs.unbound_symbols,
+        qs.domain,
+        qs.element_filter,
+        lambda env, x: x,
+    )
+
+    return qs.transformation(None, quantified_set)
 
 
 @dispatch
-def push(quantified_set: QuantifiedSet):
+def push(qs: QuantifiedSet):
     """forall x (visited x) -> (visited (forall x x))"""
-    qs = copy.deepcopy(quantified_set)
-    qs.transformation = lambda x: x
+    # qs = copy.deepcopy(quantified_set)
+    # qs = quantified_set
+    # qs.transformation = lambda x: x
 
-    return quantified_set.transformation(qs)
+    quantified_set = QuantifiedSet(
+        qs.quantifier,
+        qs.unbound_symbols,
+        qs.domain,
+        qs.element_filter,
+        lambda x: x,
+        qs.base_improper_quantified_set,
+    )
+
+    return qs.transformation(quantified_set)
 
 
 def generate(quantified_set: QuantifiedSet):

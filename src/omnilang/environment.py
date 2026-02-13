@@ -4,6 +4,7 @@ from typing import Optional, Any
 from omniplanner.omniplanner import DsgContextProvider
 import spark_dsg
 import logging
+from omnilang.mdp_states import Symbol
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +31,9 @@ class DsgEnvironment:
                 dsg_symbols.add(explicit_symbol)
         return dsg_symbols
 
-    def get_metadata_for_symbol(self, symbol):
-        return self.dsg_context[symbol]
+    def get_metadata_for_symbol(self, symbol: Symbol):
+        assert isinstance(symbol, Symbol)
+        return self.dsg_context[symbol.identifier]
 
     def get_object_type(self, o):
         return None
@@ -82,15 +84,13 @@ class Environment:
             parent_metadata = set()
         return self.metadata_to_symbols.get(metadata_type, set()) | parent_metadata
 
-    def get_metadata_for_symbol(self, symbol):
+    def get_metadata_for_symbol(self, symbol: Symbol):
+        assert isinstance(symbol, Symbol)
         if self.parent_environment is not None:
             parent_metadata = self.parent_environment.get_metadata_for_symbol(symbol)
         else:
             parent_metadata = {}
-        if symbol in self.symbols:
-            metadata = self.symbol_to_metadata.get(symbol, {})
-        else:
-            metadata = {}
+        metadata = self.symbol_to_metadata.get(symbol, {})
         # NOTE: Unclear if we want to equate the "planning symbol" with the "dsg symbol", even if they have the same name?
         output = {}
         for k, v in parent_metadata.items():

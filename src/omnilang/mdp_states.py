@@ -20,6 +20,9 @@ class Predicate:
 class Symbol:
     identifier: str
 
+    def __post_init__(self):
+        assert isinstance(self.identifier, str)
+
     def __str__(self):
         return f"sym-{self.identifier}"
 
@@ -157,6 +160,7 @@ class QuantifiedSet:
     domain: str  # TODO: what type? # Should this be called "generator"
     element_filter: callable  # x -> bool
     transformation: callable  # x -> y
+    base_improper_quantified_set: Optional[ImproperQuantifiedSet] = None
 
 
 @dataclass

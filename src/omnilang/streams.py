@@ -24,7 +24,8 @@ def eval_quantifier(env, quantified_expression: ImproperQuantifiedSet, state: St
         env,
         quantified_expression,
         quantified_expression.unbound_symbols[0],
-        env.symbols,
+        # env.symbols,
+        list(env.get_symbols()),
     )
 
 
@@ -272,7 +273,8 @@ def find_streams_affecting_goal(streams: set[Stream], state: State, goal):
         child_env = Environment(None, t.formal_outputs, symbol_to_type)
 
         # TODO: handle streams with multiple outputs
-        if does_goal_depend_on(goal, child_env, Symbol(t.formal_outputs[0])):
+        assert isinstance(t.formal_outputs[0], Symbol)
+        if does_goal_depend_on(goal, child_env, t.formal_outputs[0]):
             direct_dependencies["goal"].add(t.name)
 
     # Now, we want all satisfied streams that are backwards-reachable from goal
@@ -311,7 +313,6 @@ def expand_streams(env, streams, state, stream_evals_per_level=inf):
         applicable_args = s.get_applicable_args(symbol_to_facts)
         for idx, a in enumerate(applicable_args):
             # NOTE: implications for passing base env to all streams (vs. "incrementally" updated env)
-            print(f"Applying stream {s.name} with args:", a)
             grounded_stream, symbol_metadata = s.apply(a, environment=env)
 
             ns = grounded_stream.output_symbols
