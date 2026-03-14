@@ -6,14 +6,15 @@ from omnilang.mdp_states import (
     Symbol,
     Fact,
     State,
+    PddlExists,
 )
 from omnilang.mdp_state_operations import push, generate
 from omnilang.environment import Environment
 from dsg_pddl.pddl_planning import solve_pddl
 from dsg_pddl.pddl_grounding import PddlProblem, GroundedPddlProblem, PddlDomain
-from omnilang.streams import group_objects_by_type
+from omnilang.streams import get_pddl_types, get_symbols_from_facts
 from plum import dispatch
-from omnilang.construct_problem import expand_streams, Problem
+from omnilang.construct_problem import expand_streams, Problem, FullDomain
 
 
 @dispatch
@@ -36,9 +37,25 @@ def to_pddl_goal(goal: PartialState):
     return ("and",) + positives + negatives
 
 
+@dispatch
+def to_pddl_goal(goal: PddlExists):
+    parms = ()
+    for parm, typ in zip(goal.unbound_elements, goal.type_restrictions):
+        parms += (f"{parm.identifier} - {typ}",)
+
+    if isinstance(goal.body, Fact):
+        body = goal.body.to_pddl_string()
+    else:
+        body = ("and",) + tuple(f.to_pddl_string() for f in goal.body)
+
+    tuple_goal = ("exists", parms, body)
+    print("tuple goal: ", tuple_goal)
+    return tuple_goal
+
+
 def solve_existential(
     env: Environment,
-    domain: PddlDomain,
+    domain: FullDomain,
     initial_state,
     goal: QuantifiedSet,
 ):
@@ -47,7 +64,9 @@ def solve_existential(
         plan = solve(domain, initial_state, goal)
         if plan is not None:
             break
-        env, initial_state = expand_streams(env, domain.streams, initial_state)
+        env, initial_state = expand_streams(
+            env, domain.pddl_domain, domain.streams, initial_state
+        )
         print("Solving failed with existential quantifier. Trying higher stream depth!")
         for f in initial_state.facts:
             print(f)
@@ -110,19 +129,37 @@ def modal_solve(
     return env, solve(domain, initial_state, goal)
 
 
-def solve(domain: PddlDomain, initial_state, goal: PartialState | QuantifiedSet):
+def build_pddl_problem(
+    domain: PddlDomain,
+    env: Environment,
+    initial_state,
+    goal: PartialState | QuantifiedSet,
+):
     tuple_goal = to_pddl_goal(goal)
-    objects = group_objects_by_type(domain, initial_state.facts)
+    symbols = get_symbols_from_facts(initial_state.facts)
+    type_to_objects = {}
+    for s in symbols:
+        t = env.get_object_type(s)
+        if t not in type_to_objects:
+            type_to_objects[t] = []
+        type_to_objects[t].append(s.identifier)
     problem = PddlProblem(
-        name="test_explore",
+        name=f"solve-{domain.name}",
         domain=domain.name,
-        # TODO: "T" is temporary until we properly deal with types vs unary predicates
-        objects={k + "T": [o.identifier for o in objs] for k, objs in objects.items()},
-        initial_facts=[i.to_tuple() for i in initial_state.facts],
+        objects=type_to_objects,
+        initial_facts=[
+            i.to_tuple()
+            for i in initial_state.facts
+            if i.head not in get_pddl_types(domain)
+        ],
         goal=tuple_goal,
         optimizing=False,
     )
+    return problem
 
+
+def solve(domain: PddlDomain, initial_state, goal: PartialState | QuantifiedSet):
+    problem = build_pddl_problem(domain, initial_state, goal)
     problem_string = problem.to_string()
 
     grounded_problem = GroundedPddlProblem(domain, problem_string, {})

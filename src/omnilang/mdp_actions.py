@@ -35,7 +35,20 @@ class LiftedAction:
         lines = []
         lines.append(f"(:action {self.name}")
 
-        str_params = " ".join([p.identifier for p in self.params])
+        param_strings = []
+        for p, restrictions in zip(self.params, self.param_restrictions):
+            match restrictions:
+                case []:
+                    param_strings.append(f"{p.identifier} - object")
+                case [restriction]:
+                    param_strings.append(f"{p.identifier} - {restriction}")
+                case _:
+                    raise Exception(
+                        f"Currently only one type restriction per parameter is supported by PDDL. Action {self.name} has parameter {p} with restrictions {restrictions}"
+                    )
+
+        str_params = " ".join(param_strings)
+
         lines.append(indent(1, f":parameters ({str_params})"))
 
         lines += indent(1, self._precondition_pddl_str())

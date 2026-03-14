@@ -1,6 +1,6 @@
 from omnilang.mdp_states import forall, Fact, Environment, generate, Symbol, State
 from dsg_pddl.pddl_grounding import PddlDomain
-from streams import (
+from omnilang.streams import (
     find_streams_affecting_goal,
     expand_streams,
     eval_quantifier,
@@ -52,7 +52,7 @@ for depth in range(max_depth):
     # restrict goal, check if goal in s0
     evaled_goal = eval_quantifier(generated_env, goal, generated_s0)
     explicit_goal = [g for g in generate(evaled_goal)]
-    #if explicit_goal not in s0:
+    # if explicit_goal not in s0:
     if explicit_goal not in generated_s0:
         break
     generated_env, generated_s0 = expand_streams(

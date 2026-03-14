@@ -70,24 +70,33 @@ def generate(quantified_set: QuantifiedSet):
             yield quantified_set.transformation(e)
 
 
-def satisfies(s, r):
-    # TODO: use types to improve grounding efficiency
-    return True
+# def satisfies(s, r, env):
+#    # TODO: use types to improve grounding efficiency
+#    return True
 
 
-def iterate_satisfying_symbols(symbols, restrictions):
-    for s in symbols:
-        if satisfies(s, restrictions):
+def iterate_satisfying_symbols(symbols, restrictions: list, env: Environment):
+    if len(restrictions) == 0:
+        # could be any symbol
+        for s in symbols:
             yield s
+    elif len(restrictions) == 1:
+        possible_bindings = env.get_objects_of_type(restrictions[0])
+        for s in possible_bindings:
+            yield s
+    else:
+        raise Exception(
+            f"Currently only support 0 or 1 restrictions, got {restrictions} instead"
+        )
     return
 
 
-def ground(restrictions: list[list[Restriction]], symbols):
+def ground(restrictions: list[list[Restriction]], symbols, env=None):
     if len(restrictions) == 0:
         yield []
     else:
-        for s in iterate_satisfying_symbols(symbols, restrictions[0]):
-            for binding in ground(restrictions[1:], symbols):
+        for s in iterate_satisfying_symbols(symbols, restrictions[0], env):
+            for binding in ground(restrictions[1:], symbols, env):
                 yield [s] + binding
 
 

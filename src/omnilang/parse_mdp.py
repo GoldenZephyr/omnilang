@@ -1,9 +1,137 @@
 from importlib.resources import as_file, files
 import omnilang.lark
-from omnilang.mdp_definition import PddlDomain
-from omnilang.mdp_states import Fact, NegatedFact, Symbol, TypedSymbol, negate
+from omnilang.mdp_definition import PddlDomain, DomainPredicate, PddlProblemInstance
+from omnilang.mdp_states import (
+    Fact,
+    NegatedFact,
+    Symbol,
+    TypedSymbol,
+    negate,
+    PddlExists,
+    PartialState,
+)
 from omnilang.mdp_actions import LiftedAction
 from lark import Lark, Transformer
+
+
+class ProblemTransformer(Transformer):
+    def start(self, domain):
+        return domain
+
+    def problem(self, items):
+        name, fields = items
+        domain = fields[0]
+        objects, objects_to_type, type_to_objects = fields[1]
+        init = fields[2]
+        goal = fields[3]
+
+        return PddlProblemInstance(
+            name, domain, objects, objects_to_type, type_to_objects, init, goal
+        )
+
+    def problem_body(self, items):
+        return items
+
+    def domain(self, items):
+        return items[0]
+
+    def objects(self, instances_of_type: list[tuple[str, list[Symbol]]]):
+        objects = []
+        type_to_objects = {}
+        objects_to_type = {}
+        for type, symbols in instances_of_type:
+            objects += symbols
+            type_to_objects[type] = symbols
+            for s in symbols:
+                objects_to_type[s] = type
+        return objects, objects_to_type, type_to_objects
+
+    def instances_of_type(self, items):
+        type = items[1]
+        instances = items[0]
+        return type, instances
+
+    def init(self, items):
+        return items
+
+    def fact(self, items):
+        head, body = items
+        return Fact(head, body)
+
+    def lifted_fact(self, items):
+        head, body = items
+        return Fact(head, body)
+
+    def symbol_list(self, items):
+        return items
+
+    def symbol(self, items):
+        return Symbol(items[0])
+
+    def goal(self, item):
+        print(item)
+        if not isinstance(item[0], PddlExists):
+            return PartialState(set(item), set())
+        return item[0]
+
+    def formula(self, items):
+        return items[0]
+
+    def conjunction(self, items):
+        # TODO: eventually should explicitly represent conjunction
+        return PartialState(set(items), set())
+
+    def negation(self, items):
+        match items[0]:
+            case Fact():
+                return negate(items[0])
+            case NegatedFact():
+                return negate(items[0])
+            case _:
+                raise ValueError(
+                    f"Currently you can only negate facts, not formulas (tried to negate {items[0]}"
+                )
+
+    def disjunction(self, items):
+        raise NotImplementedError("Disjunctive goals not yet supported!")
+
+    def existential(self, items):
+        args, body = items
+        types = []
+        formal_args = []
+        for a in args:
+            formal_args.append(a[0])
+            match a:
+                case (_, type):
+                    types.append(type)
+                case (_, []):
+                    types.append("object")
+        return PddlExists(formal_args, types, body)
+
+    def taggable_var(self, items):
+        match items[0]:
+            case Symbol():
+                return (items[0], [])
+            case TypedSymbol():
+                return (Symbol(items[0].identifier), items[0].type)
+            case _:
+                raise Exception(f"Unknown taggable_var {items[0]}")
+
+    def taggable_var_list(self, items):
+        return items
+
+    def typed_var(self, items):
+        return TypedSymbol(items[0].identifier, items[1])
+
+    def NAME(self, token):
+        return str(token)
+
+    def var(self, items):
+        # Currently treat variables and nonvariables the same
+        return Symbol(f"?{items[0]}")
+
+    def var_list(self, items):
+        return items
 
 
 class DomainTransformer(Transformer):
@@ -16,12 +144,14 @@ class DomainTransformer(Transformer):
         functions = fields[1]
         predicates = fields[2]
         actions = fields[3]
-        return PddlDomain(name, types, functions, predicates, actions)
+        requirements = fields[4]
+        return PddlDomain(name, types, functions, predicates, actions, requirements)
 
     def domain_body(self, items):
         types = None
         functions = None
         predicates = None
+        requirements = None
         actions = []
         for field, value in items:
             match field:
@@ -33,15 +163,23 @@ class DomainTransformer(Transformer):
                     predicates = value
                 case "action":
                     actions.append(value)
+                case "requirements":
+                    requirements = value
                 case _:
                     raise ValueError(f"Unknown domain section {field}")
-        return types, functions, predicates, actions
+        return types, functions, predicates, actions, requirements
 
     def types(self, items):
         type_to_children = {}
         for t in items:
             type_to_children |= t
         return "types", type_to_children
+
+    def requirements(self, items):
+        return "requirements", items
+
+    def requirement(self, items):
+        return str(items[0])
 
     def type_decl(self, items):
         return {items[-1]: items[:-1]}
@@ -54,13 +192,13 @@ class DomainTransformer(Transformer):
 
     def predicate_def(self, items):
         symbols = [item[0] for item in items[1:]]
-        # restrictions = [item[1] for item in items[1:]] # TODO: do pass along restrictions
-        return Fact(items[0], symbols)
+        restrictions = [[item[1]] for item in items[1:]]
+        return DomainPredicate(items[0], symbols, restrictions)
 
     def action(self, items):
         name, parameters, precondition, effects = items
         params = [p[0] for p in parameters]
-        restrictions = [p[1] for p in parameters]
+        restrictions = [[p[1]] for p in parameters]
         positive_effects = []
         negative_effects = []
         match effects:
@@ -158,8 +296,26 @@ def parse_domain_file(fn):
     return streams
 
 
-if __name__ == "__main__":
+def parse_problem_file(fn):
+    with as_file(files(omnilang.lark).joinpath("pddl_instance.lark")) as path:
+        with open(path, "r") as fo:
+            problem_grammar = fo.read()
 
+    problem_parser = Lark(
+        problem_grammar,
+    )
+
+    T = ProblemTransformer()
+
+    with open(fn, "r") as fo:
+        problem = fo.read()
+
+    tree = problem_parser.parse(problem)
+    problem = T.transform(tree)
+    return problem
+
+
+if __name__ == "__main__":
     domain = parse_domain_file("pick_domain.pddl")
     print("Domain: ")
     print(domain)

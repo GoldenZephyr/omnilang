@@ -1,8 +1,8 @@
 from lark import Lark, Transformer
 from importlib.resources import as_file, files
 import omnilang.lark
-from omnilang.streams import Stream
-from omnilang.mdp_states import Fact, Symbol, NegatedFact, negate
+from omnilang.streams import Stream, DerivedStreamFacts
+from omnilang.mdp_states import Fact, Symbol, NegatedFact, negate, TypedSymbol
 
 
 class StreamTransformer(Transformer):
@@ -10,36 +10,84 @@ class StreamTransformer(Transformer):
         # start -> stream_file
         return streams[0]
 
-    def stream_file(self, streams):
-        return streams
+    def stream_file(self, stream_file_elements):
+        streams = []
+        derived_stream_facts = []
+        for s in stream_file_elements:
+            match s:
+                case Stream():
+                    streams.append(s)
+                case DerivedStreamFacts():
+                    derived_stream_facts.append(s)
+                case _:
+                    raise Exception(f"Unknown type {type(s)}")
+        return streams, derived_stream_facts
+
+    def parse_stream_fields(self, fields):
+        d = {}
+        for f in fields:
+            match f:
+                case ("inputs", inp, res):
+                    d["params"] = inp
+                    d["restrictions"] = res
+                case ("outputs", out, res):
+                    d["formal_outputs"] = out
+                    d["output_restrictions"] = res
+                case ("domain", dom):
+                    d["domain"] = dom
+                case ("certified", cert):
+                    d["certificates"] = cert
+        return d
 
     def stream_def(self, items):
         # items: [name, field1, field2, ...]
         name = items[0]
         fields = items[1:]
 
-        inputs = None
-        outputs = None
-        domain = None
-        certificates = None
+        field_values = self.parse_stream_fields(fields)
+        return Stream(name=name, **field_values)
 
-        for key, value in fields:
-            if key == "inputs":
-                inputs = value
-            elif key == "outputs":
-                outputs = value
-            elif key == "domain":
-                domain = value
-            elif key == "certified":
-                certificates = value
+        # print("name:", name)
+        # print("fields:", fields)
 
-        return Stream(
-            name=name,
-            params=inputs,
-            domain=domain,
-            formal_outputs=outputs,
-            certificates=certificates,
-        )
+        # inputs = None
+        # outputs = None
+        # domain = None
+        # certificates = None
+        # restrictions = None
+        # output_restrictions = None
+
+        # for f in fields:
+        #    match f:
+        #        case ("inputs", inp, res):
+        #            inputs = inp
+        #            restrictions = res
+        #        case ("outputs", out, res):
+        #            outputs = out
+        #            output_restrictions = res
+        #        case ("domain", d):
+        #            domain = d
+        #        case ("certified", cert):
+        #            certificates = cert
+        #        case _:
+        #            raise Exception(f"Encountered unexpected field: {f}")
+
+        # return Stream(
+        #    name=name,
+        #    params=inputs,
+        #    domain=domain,
+        #    formal_outputs=outputs,
+        #    certificates=certificates,
+        #    restrictions=restrictions,
+        #    output_restrictions=output_restrictions,
+        # )
+
+    def derived_def(self, items):
+        name = items[0]
+        fields = items[1:]
+
+        field_values = self.parse_stream_fields(fields)
+        return DerivedStreamFacts(name=name, **field_values)
 
     def stream_field(self, items):
         return items[0]
@@ -47,13 +95,20 @@ class StreamTransformer(Transformer):
     # ---------- stream fields ----------
 
     def inputs(self, items):
-        return ("inputs", items[0])
+        parms = [i[0] for i in items[0]]
+        restrictions = [[i[1]] for i in items[0]]  # type
+        return ("inputs", parms, restrictions)
 
     def outputs(self, items):
-        return ("outputs", items[0])
+        parms = [i[0] for i in items[0]]
+        restrictions = [[i[1]] for i in items[0]]  # type
+        return ("outputs", parms, restrictions)
 
     def domain(self, items):
-        return ("domain", items[0])
+        d = items[0]
+        if not isinstance(d, list):
+            d = [d]
+        return ("domain", d)
 
     def certified(self, items):
         return ("certified", items[0])
@@ -116,6 +171,21 @@ class StreamTransformer(Transformer):
             return [items[0]]
         return items[0]
 
+    def empty(self, items):
+        return []
+
+    def taggable_var(self, items):
+        match items[0]:
+            case Symbol():
+                return (items[0], [])
+            case TypedSymbol():
+                return (Symbol(items[0].identifier), items[0].type)
+            case _:
+                raise Exception(f"Unknown taggable_var {items[0]}")
+
+    def typed_var(self, items):
+        return TypedSymbol(items[0].identifier, items[1])
+
 
 def parse_stream_file(fn) -> list[Stream]:
     with as_file(files(omnilang.lark).joinpath("streams.lark")) as path:
@@ -137,7 +207,6 @@ def parse_stream_file(fn) -> list[Stream]:
 
 
 if __name__ == "__main__":
-
     streams = parse_stream_file("streams.pddl")
     print("Streams: ")
     print(streams)

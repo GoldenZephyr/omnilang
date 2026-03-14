@@ -221,3 +221,14 @@ def exists(unbound_element: str, element_type_restriction: str, fact_template):
         filt,
         fill_in_fact,
     )
+
+
+@dataclass
+class PddlExists:
+    unbound_elements: list[Symbol]
+    type_restrictions: list[str]
+    body: list[Fact]  # implicitly conjunction
+
+
+# def pddl_exists(unbound_elements: list[str], type_restrictions: list[str], quantifier_body):
+#    pass

@@ -2,7 +2,10 @@
 
 domain: "(" "define" "(" "domain" NAME ")" domain_body ")"
 
-domain_body: types? functions? predicates action+
+domain_body: requirements? types? functions? predicates action+
+
+requirements: "(" ":requirements" requirement* ")"
+requirement: ":" NAME
 
 types: "(" ":types" type_decl+ ")"
 type_decl: NAME+ "-" NAME

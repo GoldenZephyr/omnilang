@@ -38,6 +38,9 @@ class DsgEnvironment:
     def get_object_type(self, o):
         return None
 
+    def get_objects_of_type(self, t):
+        return []
+
     def get_symbols(self) -> set:
         symbols = set()
         for node in self.dsg.nodes:
@@ -57,6 +60,11 @@ class Environment:
     def __post_init__(self):
         self.symbol_to_metadata = {}
         self.metadata_to_symbols = {}
+        self.type_to_symbols = {}
+        for s, t in self.symbol_to_type.items():
+            if t not in self.type_to_symbols:
+                self.type_to_symbols[t] = []
+            self.type_to_symbols[t].append(s)
 
     def get_object_type(self, o):
         if o in self.symbol_to_type:
@@ -66,6 +74,22 @@ class Environment:
                 return self.parent_environment.get_object_type(o)
             print(f"WARNING: No type for symbol {o}")
             return None
+
+    def get_objects_of_type(self, t):
+        objects = self.type_to_symbols.get(t, [])
+        if self.parent_environment is not None:
+            parent_objects = self.parent_environment.get_objects_of_type(t)
+        else:
+            parent_objects = []
+        return objects + parent_objects
+
+    def get_type_to_objects(self):
+        if self.parent_environment is not None:
+            parent_type_to_objects = self.parent_environment.get_type_to_objects()
+        else:
+            parent_type_to_objects = {}
+        type_to_objects = self.type_to_symbols
+        return type_to_objects | parent_type_to_objects
 
     def attach_metadata(self, symbol, symbol_data: dict[str, Any]):
         # TODO: Can we attach metadata in this environment to a symbol in an ancestor environment?
@@ -100,5 +124,8 @@ class Environment:
         return output
 
     def get_symbols(self) -> set:
-        parent_symbols = self.parent_environment.get_symbols()
+        if self.parent_environment is not None:
+            parent_symbols = self.parent_environment.get_symbols()
+        else:
+            parent_symbols = set()
         return set(self.symbols) | parent_symbols

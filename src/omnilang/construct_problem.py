@@ -1,6 +1,7 @@
 import spark_dsg
 from omnilang.streams import (
     Stream,
+    DerivedStreamFacts,
     find_streams_affecting_goal,
     expand_streams,
     eval_quantifier,
@@ -25,14 +26,21 @@ from omnilang.rules import apply_rules
 from dataclasses import dataclass
 import math
 import logging
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
 class FullDomain:
-    def __init__(self, pddl_domain: PddlDomain, streams: list[Stream]):
+    def __init__(
+        self,
+        pddl_domain: PddlDomain,
+        streams: list[Stream],
+        derived_stream_facts: Optional[list[DerivedStreamFacts]] = None,
+    ):
         self.pddl_domain = pddl_domain
         self.streams = streams
+        self.derived_stream_facts = derived_stream_facts
 
 
 @dataclass
@@ -44,12 +52,13 @@ class Problem:
 def load_full_domain(
     pddl_domain_path: str, stream_path: str, stream_functions: dict[str, callable] = {}
 ):
-    streams = parse_stream_file(stream_path)
+    streams, derived_stream_facts = parse_stream_file(stream_path)
+    print(streams)
     for s in streams:
         if s.name in stream_functions:
             s.metadata_generator = stream_functions[s.name]
     pddl_domain = parse_domain_file(pddl_domain_path)
-    return FullDomain(pddl_domain, streams)
+    return FullDomain(pddl_domain, streams, derived_stream_facts)
 
 
 def dsg_to_problem(G, initial_place, include_object_connections=False):
@@ -122,6 +131,7 @@ def generate_bindable_world(
 
         generated_env, generated_s0 = expand_streams(
             generated_env,
+            domain.pddl_domain,
             relevant_streams,
             generated_s0,
             stream_evals_per_level=stream_evals_per_level,
@@ -153,6 +163,7 @@ def generate_unsatisfying_consistent_world(
             break
         generated_env, generated_s0 = expand_streams(
             generated_env,
+            domain.pddl_domain,
             relevant_streams,
             generated_s0,
             stream_evals_per_level=stream_evals_per_level,

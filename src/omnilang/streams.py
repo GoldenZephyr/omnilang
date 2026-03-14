@@ -13,6 +13,9 @@ from omnilang.mdp_state_operations import ground, ground_predicate, restrict
 from plum import dispatch
 from math import inf
 from dataclasses import dataclass
+from typing import Optional
+
+from omnilang.mdp_definition import PddlDomain
 
 
 def eval_quantifier(env, quantified_expression: ImproperQuantifiedSet, state: State):
@@ -29,13 +32,14 @@ def eval_quantifier(env, quantified_expression: ImproperQuantifiedSet, state: St
     )
 
 
-def get_pddl_types(domain):
-    # For these purposes, a type is a unary predicate that isn't present in any action effects
-    # Or, I guess maybe we just read the type section from the domain?
-    return ["place", "frontier", "obj", "food", "mold", "splace"]
+def get_pddl_types(domain: PddlDomain):
+    types = ["object"]
+    for subtypes in domain.types.values():
+        types += subtypes
+    return list(set(types))
 
 
-def group_objects_by_type(domain, facts):
+def group_objects_by_type(domain: PddlDomain, facts):
     types = get_pddl_types(domain)
     type_to_objects = {}
     for f in facts:
@@ -108,6 +112,27 @@ class GroundedStream:
     output_facts: tuple[Fact]
 
 
+class DerivedStreamFacts:
+    def __init__(
+        self,
+        name,
+        params,
+        domain,
+        certificates,
+        restrictions: Optional[list[list]] = None,
+    ):
+        self.name = name
+        self.formal_params = params  # List of symbols (formal params)
+        self.domain = domain  # List of Restrictions
+        self.certificates = certificates  # List of Restrictions
+        if restrictions is None:
+            restrictions = [[] for _ in range(len(params))]
+        else:
+            assert len(restrictions) == len(params)
+
+        self.restrictions = restrictions
+
+
 class Stream:
     def __init__(
         self,
@@ -118,12 +143,21 @@ class Stream:
         certificates,
         symbol_prefixes=None,
         metadata_generator=None,
+        restrictions: Optional[list[list]] = None,
+        output_restrictions: Optional[list[list]] = None,
     ):
         self.name = name
         self.formal_params = params  # List of symbols (formal params)
         self.domain = domain  # List of Restrictions
         self.formal_outputs = formal_outputs  # List of symbols
         self.certificates = certificates  # List of Restrictions
+        if restrictions is None:
+            restrictions = [[] for _ in range(len(params))]
+        else:
+            assert len(restrictions) == len(params)
+
+        self.restrictions = restrictions
+        self.output_restrictions = output_restrictions
         if symbol_prefixes is None:
             self.symbol_prefixes = ["s" for _ in self.formal_outputs]
         else:
@@ -156,9 +190,6 @@ class Stream:
         # return grounded_outputs, grounded_facts, metadata
 
     def generate_metadata(self, environment, inputs, output_args):
-        print(
-            "generated_metadata g0: ", environment.get_metadata_for_symbol(Symbol("g0"))
-        )
         if self.metadata_generator is not None:
             if environment is not None:
                 print("getting metadata for inputs: ", inputs)
@@ -189,9 +220,10 @@ class Stream:
 
         return satisfied
 
-    def get_applicable_args(self, symbols_to_facts):
+    def get_applicable_args(self, symbols_to_facts, env=None):
         applicable_args = []
-        for bindings in ground([[]], symbols_to_facts.keys()):
+        print("stream restrictions: ", self.restrictions)
+        for bindings in ground(self.restrictions, symbols_to_facts.keys(), env=env):
             current_facts = []
             for s in bindings:
                 for f in symbols_to_facts[s]:
@@ -299,7 +331,9 @@ def add_facts_to_state(facts, state):
     return State(state.facts | set(facts))
 
 
-def expand_streams(env, streams, state, stream_evals_per_level=inf):
+def expand_streams(
+    env: Environment, domain: PddlDomain, streams, state, stream_evals_per_level=inf
+):
     # compose (\circ) streams (in the order given) to state
     # Actually, this is not exactly \circ, because here we apply each stream as
     # many times as possible at the current depth before moving on to the next
@@ -310,20 +344,29 @@ def expand_streams(env, streams, state, stream_evals_per_level=inf):
     new_symbol_metadata = []
     for s in streams:
         symbol_to_facts = group_facts_by_symbol(state.facts)
-        applicable_args = s.get_applicable_args(symbol_to_facts)
+        applicable_args = s.get_applicable_args(symbol_to_facts, env)
         for idx, a in enumerate(applicable_args):
             # NOTE: implications for passing base env to all streams (vs. "incrementally" updated env)
             grounded_stream, symbol_metadata = s.apply(a, environment=env)
 
             ns = grounded_stream.output_symbols
+            if s.output_restrictions is not None:
+                for sym, t in zip(ns, s.output_restrictions):
+                    new_symbols_to_type[sym] = t[0]
+
             new_facts = grounded_stream.output_facts
             for m in symbol_metadata.values():
                 m["generator"] = grounded_stream
 
             new_symbol_metadata.append(symbol_metadata)
 
-            domain = None
-            new_symbols_to_type |= get_symbol_to_type(domain, State(new_facts))
+            fact_based_symbol_to_type = get_symbol_to_type(domain, State(new_facts))
+            for sym, t in fact_based_symbol_to_type.items():
+                if sym in new_symbols_to_type:
+                    raise Exception(
+                        f"Stream {s.name} assigns an output type {t} for {sym}, but {sym} was already annotated with {new_symbols_to_type[sym]}"
+                    )
+                new_symbols_to_type[sym] = t
 
             state = add_facts_to_state(new_facts, state)
             new_symbols = new_symbols + ns

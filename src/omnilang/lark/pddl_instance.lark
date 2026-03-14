@@ -1,0 +1,47 @@
+?start: problem
+
+problem: "(" "define" "(" "problem" NAME ")" problem_body ")"
+
+problem_body: domain objects init goal
+
+domain: "(" ":domain" NAME ")"
+
+objects: "(" ":objects" instances_of_type* ")"
+instances_of_type: symbol_list "-" NAME
+
+symbol_list: symbol*
+
+init: "(" ":init" fact* ")"
+fact: "(" NAME symbol_list ")"
+lifted_fact: "(" NAME var_list ")"
+
+symbol: NAME
+
+goal: "(" ":goal" formula ")"
+
+?formula: fact
+        | lifted_fact
+        | "(" "and" formula+ ")" -> conjunction
+        | "(" "not" formula ")" -> negation
+        | "(" "or" formula ")" -> disjunction
+        | existential
+        | universal
+
+existential: "(" "exists" "(" taggable_var_list ")" formula ")"
+universal: "(" "forall" "(" taggable_var_list ")" formula ")"
+
+var: "?" NAME
+taggable_var: var | typed_var
+typed_var: var "-" NAME
+
+var_list: var*
+taggable_var_list: taggable_var*
+
+NAME: /[a-zA-Z_][a-zA-Z0-9_-]*/
+
+COMMENT: ";" /[^\n]*/ NEWLINE
+
+%import common.WS
+%import common.NEWLINE
+%ignore WS
+%ignore COMMENT

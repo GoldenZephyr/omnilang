@@ -1,8 +1,10 @@
 start: stream_file
 
-stream_file: stream_def+
+stream_file: (stream_def | derived_def)*
 
 stream_def: "(" ":stream" NAME stream_field+ ")"
+
+derived_def: "(" ":derived" NAME inputs domain certified ")"
 
 stream_field: inputs
             | domain
@@ -15,21 +17,23 @@ outputs: ":outputs" var_list
 domain: ":domain" logical_expr
 certified: ":certified" logical_expr
 
-var_list: "(" variable+ ")"
+var_list: "(" taggable_var+ ")"
 
 logical_expr: predicate
             | "(" "and" logical_expr+ ")" -> and_expr
             | "(" "not" logical_expr ")" -> negation
+            | "()" -> empty
 
 predicate: "(" NAME term* ")"
 
 term: variable
     | NAME
 
-variable: VAR
+variable: "?" NAME
+taggable_var: variable | typed_var
+typed_var: variable "-" NAME
 
 NAME: /[a-zA-Z_][a-zA-Z0-9_-]*/
-VAR: /\?[a-zA-Z_][a-zA-Z0-9_-]*/
 COMMENT: ";" /[^\n]*/ NEWLINE
 
 %import common.NEWLINE
