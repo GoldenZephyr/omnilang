@@ -230,5 +230,12 @@ class PddlExists:
     body: list[Fact]  # implicitly conjunction
 
 
+@dataclass
+class PddlForall:
+    unbound_elements: list[Symbol]
+    type_restrictions: list[str]
+    body: list[Fact]  # implicitly conjunction
+
+
 # def pddl_exists(unbound_elements: list[str], type_restrictions: list[str], quantifier_body):
 #    pass

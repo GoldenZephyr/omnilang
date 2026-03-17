@@ -7,6 +7,7 @@ from omnilang.mdp_states import (
     Fact,
     State,
     PddlExists,
+    PddlForall,
 )
 from omnilang.mdp_state_operations import push, generate
 from omnilang.environment import Environment
@@ -39,17 +40,29 @@ def to_pddl_goal(goal: PartialState):
 
 @dispatch
 def to_pddl_goal(goal: PddlExists):
+    return build_quantified_goal(
+        "exists", goal.unbound_elements, goal.type_restrictions, goal.body
+    )
+
+
+@dispatch
+def to_pddl_goal(goal: PddlForall):
+    return build_quantified_goal(
+        "forall", goal.unbound_elements, goal.type_restrictions, goal.body
+    )
+
+
+def build_quantified_goal(quantifier: str, free_vars, types, body):
     parms = ()
-    for parm, typ in zip(goal.unbound_elements, goal.type_restrictions):
+    for parm, typ in zip(free_vars, types):
         parms += (f"{parm.identifier} - {typ}",)
 
-    if isinstance(goal.body, Fact):
-        body = goal.body.to_pddl_string()
+    if isinstance(body, Fact):
+        body = body.to_pddl_string()
     else:
-        body = ("and",) + tuple(f.to_pddl_string() for f in goal.body)
+        body = ("and",) + tuple(f.to_pddl_string() for f in body)
 
-    tuple_goal = ("exists", parms, body)
-    print("tuple goal: ", tuple_goal)
+    tuple_goal = (quantifier, parms, body)
     return tuple_goal
 
 

@@ -8,6 +8,7 @@ from omnilang.mdp_states import (
     TypedSymbol,
     negate,
     PddlExists,
+    PddlForall,
     PartialState,
 )
 from omnilang.mdp_actions import LiftedAction
@@ -70,9 +71,11 @@ class ProblemTransformer(Transformer):
 
     def goal(self, item):
         print(item)
-        if not isinstance(item[0], PddlExists):
-            return PartialState(set(item), set())
-        return item[0]
+        match item[0]:
+            case PddlExists() | PddlForall():
+                return item[0]
+            case _:
+                return PartialState(set(item), set())
 
     def formula(self, items):
         return items[0]
@@ -94,6 +97,19 @@ class ProblemTransformer(Transformer):
 
     def disjunction(self, items):
         raise NotImplementedError("Disjunctive goals not yet supported!")
+
+    def universal(self, items):
+        args, body = items
+        types = []
+        formal_args = []
+        for a in args:
+            formal_args.append(a[0])
+            match a:
+                case (_, type):
+                    types.append(type)
+                case (_, []):
+                    types.append("object")
+        return PddlForall(formal_args, types, body)
 
     def existential(self, items):
         args, body = items
