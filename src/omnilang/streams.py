@@ -16,6 +16,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 from omnilang.mdp_definition import PddlDomain
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def eval_quantifier(env, quantified_expression: ImproperQuantifiedSet, state: State):
@@ -34,6 +37,10 @@ def eval_quantifier(env, quantified_expression: ImproperQuantifiedSet, state: St
 
 def get_pddl_types(domain: PddlDomain):
     types = ["object"]
+    if domain.types is None:
+        logger.warning(f"No types defined for domain {domain.name}")
+        return types
+
     for subtypes in domain.types.values():
         types += subtypes
     return list(set(types))
@@ -268,7 +275,9 @@ def does_goal_depend_on(goal: PartialState, env, symbol):
     return symbol in goal_symbols
 
 
-def find_streams_affecting_goal(streams: set[Stream], state: State, goal):
+def find_streams_affecting_goal(
+    domain: PddlDomain, streams: set[Stream], state: State, goal
+):
     predicates_in_goal = extract_goal_predicates(goal)
     print("preds in goal: ", predicates_in_goal)
 
@@ -297,8 +306,6 @@ def find_streams_affecting_goal(streams: set[Stream], state: State, goal):
 
     # check which streams the goal depends on *directly*
     for t in streams:
-        # TODO: feed in domain
-        domain = None
         symbol_to_type = get_symbol_to_type(domain, State(t.certificates))
         print(f"Stream {t.name} output types: {symbol_to_type}")
         # TODO: parent env
@@ -352,7 +359,8 @@ def expand_streams(
             ns = grounded_stream.output_symbols
             if s.output_restrictions is not None:
                 for sym, t in zip(ns, s.output_restrictions):
-                    new_symbols_to_type[sym] = t[0]
+                    if t is not None:
+                        new_symbols_to_type[sym] = t[0]
 
             new_facts = grounded_stream.output_facts
             for m in symbol_metadata.values():
@@ -363,9 +371,10 @@ def expand_streams(
             fact_based_symbol_to_type = get_symbol_to_type(domain, State(new_facts))
             for sym, t in fact_based_symbol_to_type.items():
                 if sym in new_symbols_to_type:
-                    raise Exception(
-                        f"Stream {s.name} assigns an output type {t} for {sym}, but {sym} was already annotated with {new_symbols_to_type[sym]}"
-                    )
+                    if new_symbols_to_type[sym] != t:
+                        raise Exception(
+                            f"Stream {s.name} assigns an output type {t} for {sym}, but {sym} was already annotated with {new_symbols_to_type[sym]}"
+                        )
                 new_symbols_to_type[sym] = t
 
             state = add_facts_to_state(new_facts, state)

@@ -208,13 +208,13 @@ class DomainTransformer(Transformer):
 
     def predicate_def(self, items):
         symbols = [item[0] for item in items[1:]]
-        restrictions = [[item[1]] for item in items[1:]]
+        restrictions = [[item[1]] if item[1] is not None else [] for item in items[1:]]
         return DomainPredicate(items[0], symbols, restrictions)
 
     def action(self, items):
         name, parameters, precondition, effects = items
         params = [p[0] for p in parameters]
-        restrictions = [[p[1]] for p in parameters]
+        restrictions = [[p[1]] if p[1] is not None else [] for p in parameters]
         positive_effects = []
         negative_effects = []
         match effects:
@@ -273,7 +273,7 @@ class DomainTransformer(Transformer):
     def taggable_var(self, items):
         match items[0]:
             case Symbol():
-                return (items[0], [])
+                return (items[0], None)
             case TypedSymbol():
                 return (Symbol(items[0].identifier), items[0].type)
             case _:

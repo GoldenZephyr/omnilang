@@ -116,7 +116,7 @@ def generate_bindable_world(
     relevant_streams = find_streams_affecting_goal(domain.streams, state, goal)
     generated_s0 = copy.deepcopy(state)
     generated_symbols = get_symbols_from_facts(state.facts)
-    symbol_to_type = get_symbol_to_type(None, state)
+    symbol_to_type = get_symbol_to_type(domain.pddl_domain, state)
     generated_env = Environment(env, generated_symbols, symbol_to_type)
 
     max_depth = 10
@@ -142,11 +142,13 @@ def generate_bindable_world(
 def generate_unsatisfying_consistent_world(
     domain: FullDomain, env: Environment, state: State, goal: ImproperQuantifiedSet
 ):
-    relevant_streams = find_streams_affecting_goal(domain.streams, state, goal)
+    relevant_streams = find_streams_affecting_goal(
+        domain.pddl_domain, domain.streams, state, goal
+    )
 
     generated_s0 = copy.deepcopy(state)
     generated_symbols = get_symbols_from_facts(state.facts)
-    symbol_to_type = get_symbol_to_type(None, state)
+    symbol_to_type = get_symbol_to_type(domain.pddl_domain, state)
     generated_env = Environment(env, generated_symbols, symbol_to_type)
 
     # Expand state until the goal is no longer true in the initial state
@@ -195,7 +197,7 @@ def get_problem_for_goal(
         # some variables to support applying domain rules
         generated_s0 = copy.deepcopy(planning_representation)
         generated_symbols = get_symbols_from_facts(planning_representation.facts)
-        symbol_to_type = get_symbol_to_type(None, planning_representation)
+        symbol_to_type = get_symbol_to_type(domain.pddl_domain, planning_representation)
         generated_env = Environment(base_env, generated_symbols, symbol_to_type)
 
     apply_rules(generated_s0.facts)

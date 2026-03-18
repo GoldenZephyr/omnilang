@@ -96,12 +96,12 @@ class StreamTransformer(Transformer):
 
     def inputs(self, items):
         parms = [i[0] for i in items[0]]
-        restrictions = [[i[1]] for i in items[0]]  # type
+        restrictions = [[i[1]] if i[1] is not None else [] for i in items[0]]  # type
         return ("inputs", parms, restrictions)
 
     def outputs(self, items):
         parms = [i[0] for i in items[0]]
-        restrictions = [[i[1]] for i in items[0]]  # type
+        restrictions = [[i[1]] if i[1] is not None else None for i in items[0]]  # type
         return ("outputs", parms, restrictions)
 
     def domain(self, items):
@@ -177,7 +177,7 @@ class StreamTransformer(Transformer):
     def taggable_var(self, items):
         match items[0]:
             case Symbol():
-                return (items[0], [])
+                return (items[0], None)
             case TypedSymbol():
                 return (Symbol(items[0].identifier), items[0].type)
             case _:

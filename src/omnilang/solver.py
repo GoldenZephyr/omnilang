@@ -10,9 +10,10 @@ from omnilang.mdp_states import (
     PddlForall,
 )
 from omnilang.mdp_state_operations import push, generate
+from omnilang.mdp_definition import PddlDomain
 from omnilang.environment import Environment
 from dsg_pddl.pddl_planning import solve_pddl
-from dsg_pddl.pddl_grounding import PddlProblem, GroundedPddlProblem, PddlDomain
+from dsg_pddl.pddl_grounding import PddlProblem, GroundedPddlProblem
 from omnilang.streams import get_pddl_types, get_symbols_from_facts
 from plum import dispatch
 from omnilang.construct_problem import expand_streams, Problem, FullDomain
@@ -74,7 +75,7 @@ def solve_existential(
 ):
     max_depth = 5
     for extra_depth in range(max_depth):
-        plan = solve(domain, initial_state, goal)
+        plan = solve(env, domain, initial_state, goal)
         if plan is not None:
             break
         env, initial_state = expand_streams(
@@ -128,7 +129,9 @@ def modal_solve(
             env, Problem(initial_state, goal)
         )
         try:
-            plan = solve(domain, updated_problem.initial_state, updated_problem.goal)
+            plan = solve(
+                env, domain, updated_problem.initial_state, updated_problem.goal
+            )
         except Exception:
             plan = None
 
@@ -139,7 +142,7 @@ def modal_solve(
     if isinstance(goal, QuantifiedSet) and goal.quantifier == "exists":
         return solve_existential(env, domain, initial_state, goal)
 
-    return env, solve(domain, initial_state, goal)
+    return env, solve(env, domain, initial_state, goal)
 
 
 def build_pddl_problem(
@@ -171,8 +174,13 @@ def build_pddl_problem(
     return problem
 
 
-def solve(domain: PddlDomain, initial_state, goal: PartialState | QuantifiedSet):
-    problem = build_pddl_problem(domain, initial_state, goal)
+def solve(
+    env: Environment,
+    domain: PddlDomain,
+    initial_state,
+    goal: PartialState | QuantifiedSet,
+):
+    problem = build_pddl_problem(domain, env, initial_state, goal)
     problem_string = problem.to_string()
 
     grounded_problem = GroundedPddlProblem(domain, problem_string, {})

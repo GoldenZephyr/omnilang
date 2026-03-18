@@ -48,7 +48,7 @@ class PddlDomain:
     def __post_init__(self):
         self.names_to_action = {a.name: a for a in self.actions}
 
-    def to_pddl_string(self):
+    def to_string(self):
         lines = [(f"(define (domain {self.name})")]
 
         if self.requirements is not None:
