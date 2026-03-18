@@ -50,6 +50,14 @@ class DsgEnvironment:
             symbols.add(Symbol(symbol))
         return symbols
 
+    def contains(self, symbol) -> bool:
+        return (
+            self.dsg.find_node(
+                spark_dsg.NodeSymbol(symbol.identifier[0], int(symbol.identifer[1:]))
+            )
+            is not None
+        )
+
 
 @dataclass
 class Environment:
@@ -122,6 +130,11 @@ class Environment:
         for k, v in metadata.items():
             output[k] = v
         return output
+
+    def contains(self, symbol) -> bool:
+        if self.parent_environment is None:
+            return symbol in self.symbols
+        return symbol in self.symbols or self.parent_environment.contains(symbol)
 
     def get_symbols(self) -> set:
         if self.parent_environment is not None:

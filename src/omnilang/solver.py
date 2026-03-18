@@ -48,6 +48,7 @@ def to_pddl_goal(goal: PddlExists):
 
 @dispatch
 def to_pddl_goal(goal: PddlForall):
+    assert all([s.identifier.startswith("?") for s in goal.unbound_elements])
     return build_quantified_goal(
         "forall", goal.unbound_elements, goal.type_restrictions, goal.body
     )

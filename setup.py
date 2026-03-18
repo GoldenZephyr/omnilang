@@ -9,6 +9,6 @@ setup(
     description="Framework for specifying and solver scene graph planning problems",
     package_dir={"": "src"},
     packages=find_packages("src"),
-    package_data={"": ["*.yaml", "*.pddl", "*.lark"]},
+    package_data={"": ["*.yaml", "*.pddl", "*.lark", "*.lp"]},
     install_requires=[],
 )

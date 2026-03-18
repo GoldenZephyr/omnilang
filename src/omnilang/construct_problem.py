@@ -42,6 +42,11 @@ class FullDomain:
         self.streams = streams
         self.derived_stream_facts = derived_stream_facts
 
+    def lookup_stream(self, stream_name):
+        for s in self.streams:
+            if s.name == stream_name:
+                return s
+
 
 @dataclass
 class Problem:

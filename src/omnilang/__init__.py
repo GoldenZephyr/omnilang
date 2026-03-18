@@ -15,6 +15,7 @@ from omnilang.mdp_states import (
     forall,
     exists,
     PddlExists,
+    PddlForall,
 )
 from omnilang.mdp_state_operations import restrict, push, generate
 from omnilang.mdp_search import update_state
@@ -34,6 +35,7 @@ from omnilang.construct_problem import (
     dsg_to_problem,
     load_full_domain,
     get_problem_for_goal,
+    generate_unsatisfying_consistent_world,
 )
 from omnilang.parse_goal import parse_goal_string
 from omnilang.parse_streams import parse_stream_file
