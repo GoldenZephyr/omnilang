@@ -155,6 +155,42 @@ def solve_clingo_problem(
     return None
 
 
+def solve_clingo_problem_incremental(
+    domain: oml.FullDomain, env: oml.Environment, problem: oml.Problem, max_horizon=20
+):
+    full_clingo = problem_to_clingo(domain, env, problem, incremental=True)
+
+    clingo_problem_path = "full_problem.lp"
+    with open(clingo_problem_path, "w") as fo:
+        fo.writelines(full_clingo)
+
+    ctl = clingo.Control()
+    with as_file(
+        files(clingo_stream_planning.encodings).joinpath("sequential-incremental.lp")
+    ) as path:
+        ctl.load(str(path))
+    ctl.load(clingo_problem_path)
+
+    # ctl.ground([("instance", [])])
+    ctl.ground([("base", [])])
+    ctl.ground([("bsp_restriction", [])])
+    ctl.configuration.solve.models = 1
+
+    manager = PlanManager()
+    for t in range(1, max_horizon + 1):
+        print("Trying incremental step: ", t)
+
+        ctl.ground([("step", [clingo.Number(t)])])
+        ctl.ground([("check", [clingo.Number(t)])])
+
+        result = ctl.solve(on_model=manager.on_model)
+
+        if result.satisfiable:
+            return manager
+
+    return None
+
+
 class PlanManager:
     def __init__(self):
         self.plans = []

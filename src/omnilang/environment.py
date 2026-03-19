@@ -33,12 +33,13 @@ class DsgEnvironment:
 
     def get_metadata_for_symbol(self, symbol: Symbol):
         assert isinstance(symbol, Symbol)
-        return self.dsg_context[symbol.identifier.lower]
+        return self.dsg_context[symbol.identifier.lower()]
 
     def get_object_type(self, o):
-        raise NotImplementedError(
-            "Currently you can't rely on the base DSG environment to get symbol types"
-        )
+        print(f"WARNING: Tried to look up type for object {o} in base dsg env")
+        # raise NotImplementedError(
+        #    "Currently you can't rely on the base DSG environment to get symbol types"
+        # )
         return None
 
     def get_objects_of_type(self, t):

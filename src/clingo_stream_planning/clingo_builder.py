@@ -13,7 +13,9 @@ import tempfile
 import os
 
 
-def problem_to_clingo(domain: FullDomain, env: Environment, problem: Problem):
+def problem_to_clingo(
+    domain: FullDomain, env: Environment, problem: Problem, incremental=False
+):
     """Turn a domain, environment, and problem into an encoding that Clingo can solve"""
     pddl_problem = oml.build_pddl_problem(
         domain.pddl_domain, env, problem.initial_state, problem.goal
@@ -47,7 +49,12 @@ def problem_to_clingo(domain: FullDomain, env: Environment, problem: Problem):
         with open(translation_fn, "r") as fo:
             original_encoding = fo.readlines()
 
-    stream_augmentation = generate_stream_clingo(env, domain, problem.initial_state)
+    if incremental:
+        original_encoding = ["#program base."] + original_encoding
+
+    stream_augmentation = generate_stream_clingo(
+        env, domain, problem.initial_state, incremental
+    )
     stream_augmentation = [s + "\n" for s in stream_augmentation]
 
     return original_encoding + stream_augmentation
@@ -235,7 +242,9 @@ def derive_initial_states(derived_facts: list[oml.DerivedStreamFacts]):
     return output_clingo
 
 
-def generate_stream_clingo(env0: Environment, domain: FullDomain, s0: State):
+def generate_stream_clingo(
+    env0: Environment, domain: FullDomain, s0: State, incremental: bool
+):
     """Generate the clingo associated with all streams and derived streams"""
     streams = domain.streams
 
@@ -253,7 +262,9 @@ def generate_stream_clingo(env0: Environment, domain: FullDomain, s0: State):
 
     stream_derived_initial_states = derive_initial_states(domain.derived_stream_facts)
 
-    output_clingo = []
+    output_clingo = ["%%%%%%% Streams %%%%%%%%%\n"]
+    # if incremental:
+    #    output_clingo.append("#program streams.")
 
     for d in stream_symbol_defs:
         output_clingo.append(d)
@@ -270,14 +281,28 @@ def generate_stream_clingo(env0: Environment, domain: FullDomain, s0: State):
     output_clingo += stream_derived_initial_states
 
     # Necessary to enforce that the span of the belief state is contained within the goal.
+
+    output_clingo += ["#show goal/2."]
+    output_clingo += [
+        'pholds(Val) :- holds(derivedVariable("derived-predicate-1"), Val, 0).'
+    ]
+    output_clingo += ["#show pholds/1."]
+
+    output_clingo += ["zholds(Val) :- holds(Var, Val, 0)."]
+    output_clingo += ["#show zholds/1."]
+
+    if incremental:
+        output_clingo += ["#program bsp_restriction."]
     output_clingo += [":- goal(Variable, Value), holds(Variable, Value, 0)."]
 
     n_string_args = set(len(s.formal_params) + len(s.formal_outputs) for s in streams)
     for n in n_string_args:
-        output_clingo += [f"#show inworld/{1}."]
+        output_clingo += ["#show inworld/1."]
 
     # output_clingo += ["#show inworld/1."]
     # output_clingo += ["#show fromstream/1."]
+    output_clingo += ["#show holds/3."]
+    output_clingo += ["#show precondition/4."]
 
     return output_clingo
 

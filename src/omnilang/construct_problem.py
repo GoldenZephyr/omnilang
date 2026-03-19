@@ -69,35 +69,42 @@ def load_full_domain(
 def dsg_to_problem(G, initial_place, include_object_connections=False):
     facts = set()
 
+    symbol_to_type = {}
+
     special_object_categories = ["food"]
     for n in G.get_layer(spark_dsg.DsgLayers.OBJECTS).nodes:
         node_layer = n.layer.layer
         node_partition = n.layer.partition
         category = G.get_labelspace(node_layer, node_partition).get_node_category(n)
+        symbol = Symbol(n.id.str().lower())
         if category in special_object_categories:
-            facts.add(Fact(category, [Symbol(n.id.str().lower())]))
+            facts.add(Fact(category, [symbol]))
+            symbol_to_type[symbol] = category
         else:
-            facts.add(Fact("obj", [Symbol(n.id.str().lower())]))
+            facts.add(Fact("obj", [symbol]))
+            symbol_to_type[symbol] = "obj"
 
     traversability_layer_key = G.get_layer_key(spark_dsg.DsgLayers.TRAVERSABILITY)
     for n in G.get_layer(spark_dsg.DsgLayers.PLACES).nodes:
         attrs = n.attributes
         if not attrs.is_predicted and not attrs.real_place:
-            facts.add(Fact("frontier", [Symbol(n.id.str().lower())]))
+            frontier_symbol = Symbol(n.id.str().lower())
+            facts.add(Fact("frontier", [frontier_symbol]))
+            symbol_to_type[frontier_symbol] = "frontier"
             # NOTE: currently (3D) Places/Frontiers can't be connected to each other
             for m in n.connections():
                 if G.get_node(m).layer == traversability_layer_key:
                     ns = spark_dsg.NodeSymbol(m).str().lower()
-                    facts.add(
-                        Fact("connected", [Symbol(ns), Symbol(n.id.str().lower())])
-                    )
+                    facts.add(Fact("connected", [Symbol(ns), frontier_symbol]))
 
     for n in G.get_layer(spark_dsg.DsgLayers.TRAVERSABILITY).nodes:
-        facts.add(Fact("place", [Symbol(n.id.str().lower())]))
+        place_symbol = Symbol(n.id.str().lower())
+        facts.add(Fact("place", [place_symbol]))
+        symbol_to_type[place_symbol] = "place"
         for m in n.connections():
             if G.get_node(m).layer == traversability_layer_key:
                 ns = spark_dsg.NodeSymbol(m).str().lower()
-                facts.add(Fact("connected", [Symbol(n.id.str().lower()), Symbol(ns)]))
+                facts.add(Fact("connected", [place_symbol, Symbol(ns)]))
 
     facts.add(Fact("at", [Symbol(initial_place)]))
     facts.add(Fact("visited", [Symbol(initial_place)]))
@@ -116,7 +123,7 @@ def dsg_to_problem(G, initial_place, include_object_connections=False):
                         )
                     )
 
-    return State(facts)
+    return symbol_to_type, State(facts)
 
 
 def generate_bindable_world(
