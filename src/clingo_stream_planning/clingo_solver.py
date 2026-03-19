@@ -1,6 +1,6 @@
 import clingo
 from clingo_stream_planning.clingo_builder import problem_to_clingo
-import clingo_stream_planning
+import clingo_stream_planning.encodings
 import omnilang as oml
 from importlib.resources import as_file, files
 
@@ -123,11 +123,11 @@ def extend_env_with_clingo_world(
 
 
 def solve_clingo_problem(
-    domain: oml.FullDomain, env: oml.Environment, problem: oml.Problem, max_horizon=10
+    domain: oml.FullDomain, env: oml.Environment, problem: oml.Problem, max_horizon=20
 ):
     full_clingo = problem_to_clingo(domain, env, problem)
 
-    clingo_problem_path = "debugging/full_problem.lp"
+    clingo_problem_path = "full_problem.lp"
     with open(clingo_problem_path, "w") as fo:
         fo.writelines(full_clingo)
 

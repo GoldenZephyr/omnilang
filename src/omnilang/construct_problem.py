@@ -75,27 +75,29 @@ def dsg_to_problem(G, initial_place, include_object_connections=False):
         node_partition = n.layer.partition
         category = G.get_labelspace(node_layer, node_partition).get_node_category(n)
         if category in special_object_categories:
-            facts.add(Fact(category, [Symbol(n.id.str())]))
+            facts.add(Fact(category, [Symbol(n.id.str().lower())]))
         else:
-            facts.add(Fact("obj", [Symbol(n.id.str())]))
+            facts.add(Fact("obj", [Symbol(n.id.str().lower())]))
 
     traversability_layer_key = G.get_layer_key(spark_dsg.DsgLayers.TRAVERSABILITY)
     for n in G.get_layer(spark_dsg.DsgLayers.PLACES).nodes:
         attrs = n.attributes
         if not attrs.is_predicted and not attrs.real_place:
-            facts.add(Fact("frontier", [Symbol(n.id.str())]))
+            facts.add(Fact("frontier", [Symbol(n.id.str().lower())]))
             # NOTE: currently (3D) Places/Frontiers can't be connected to each other
             for m in n.connections():
                 if G.get_node(m).layer == traversability_layer_key:
-                    ns = spark_dsg.NodeSymbol(m).str()
-                    facts.add(Fact("connected", [Symbol(n.id.str()), Symbol(ns)]))
+                    ns = spark_dsg.NodeSymbol(m).str().lower()
+                    facts.add(
+                        Fact("connected", [Symbol(ns), Symbol(n.id.str().lower())])
+                    )
 
     for n in G.get_layer(spark_dsg.DsgLayers.TRAVERSABILITY).nodes:
-        facts.add(Fact("place", [Symbol(n.id.str())]))
+        facts.add(Fact("place", [Symbol(n.id.str().lower())]))
         for m in n.connections():
             if G.get_node(m).layer == traversability_layer_key:
-                ns = spark_dsg.NodeSymbol(m).str()
-                facts.add(Fact("connected", [Symbol(n.id.str()), Symbol(ns)]))
+                ns = spark_dsg.NodeSymbol(m).str().lower()
+                facts.add(Fact("connected", [Symbol(n.id.str().lower()), Symbol(ns)]))
 
     facts.add(Fact("at", [Symbol(initial_place)]))
     facts.add(Fact("visited", [Symbol(initial_place)]))
@@ -108,7 +110,10 @@ def dsg_to_problem(G, initial_place, include_object_connections=False):
                 layer = node.layer
                 if layer == trav_layer_key:
                     facts.add(
-                        Fact("obj-at", [Symbol(n.id.str()), Symbol(node.id.str())])
+                        Fact(
+                            "obj-at",
+                            [Symbol(n.id.str().lower()), Symbol(node.id.str().lower())],
+                        )
                     )
 
     return State(facts)
@@ -118,7 +123,9 @@ def generate_bindable_world(
     domain: FullDomain, env: Environment, state: State, goal: ImproperQuantifiedSet
 ):
     assert goal.quantifier == "exists"
-    relevant_streams = find_streams_affecting_goal(domain.streams, state, goal)
+    relevant_streams = find_streams_affecting_goal(
+        domain.pddl_domain, domain.streams, env, state, goal
+    )
     generated_s0 = copy.deepcopy(state)
     generated_symbols = get_symbols_from_facts(state.facts)
     symbol_to_type = get_symbol_to_type(domain.pddl_domain, state)
@@ -148,7 +155,7 @@ def generate_unsatisfying_consistent_world(
     domain: FullDomain, env: Environment, state: State, goal: ImproperQuantifiedSet
 ):
     relevant_streams = find_streams_affecting_goal(
-        domain.pddl_domain, domain.streams, state, goal
+        domain.pddl_domain, domain.streams, env, state, goal
     )
 
     generated_s0 = copy.deepcopy(state)

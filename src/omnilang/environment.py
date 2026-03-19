@@ -24,7 +24,7 @@ class DsgEnvironment:
             cxt = self.dsg_context[nid]
             if cxt is not None:
                 if metadata_type in cxt:
-                    dsg_symbols.add(nid)
+                    dsg_symbols.add(nid.lower())
         # dsg_symbols = set(node.id.str() for node in self.dsg.nodes)
         for explicit_symbol, cxt in self.dsg_context.items():
             if metadata_type in cxt:
@@ -33,9 +33,12 @@ class DsgEnvironment:
 
     def get_metadata_for_symbol(self, symbol: Symbol):
         assert isinstance(symbol, Symbol)
-        return self.dsg_context[symbol.identifier]
+        return self.dsg_context[symbol.identifier.lower]
 
     def get_object_type(self, o):
+        raise NotImplementedError(
+            "Currently you can't rely on the base DSG environment to get symbol types"
+        )
         return None
 
     def get_objects_of_type(self, t):
@@ -44,18 +47,19 @@ class DsgEnvironment:
     def get_symbols(self) -> set:
         symbols = set()
         for node in self.dsg.nodes:
-            symbol = Symbol(node.id.str())
+            symbol = Symbol(node.id.str().lower())
             symbols.add(symbol)
         for symbol, cxt in self.dsg_context.items():
             symbols.add(Symbol(symbol))
         return symbols
 
     def contains(self, symbol) -> bool:
-        return (
-            self.dsg.find_node(
-                spark_dsg.NodeSymbol(symbol.identifier[0], int(symbol.identifer[1:]))
+        return self.dsg.find_node(
+            spark_dsg.NodeSymbol(symbol.identifier[0], int(symbol.identifer[1:]))
+        ) is not None or self.dsg.find_node(
+            spark_dsg.NodeSymbol(
+                symbol.identifier[0].upper(), int(symbol.identifer[1:])
             )
-            is not None
         )
 
 

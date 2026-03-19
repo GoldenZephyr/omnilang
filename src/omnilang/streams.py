@@ -276,7 +276,7 @@ def does_goal_depend_on(goal: PartialState, env, symbol):
 
 
 def find_streams_affecting_goal(
-    domain: PddlDomain, streams: set[Stream], state: State, goal
+    domain: PddlDomain, streams: set[Stream], env: Environment, state: State, goal
 ):
     predicates_in_goal = extract_goal_predicates(goal)
     print("preds in goal: ", predicates_in_goal)
@@ -290,6 +290,10 @@ def find_streams_affecting_goal(
 
     for s in streams:
         stream_domain_predicates = {f.head for f in s.domain}
+        stream_domain_types = []
+        for r in s.restrictions:
+            if r is not None:
+                stream_domain_types += r
         unsatisfied_predicates = {f.head for f in s.domain}
         for dp in stream_domain_predicates:
             if dp in state_predicates:
@@ -300,16 +304,31 @@ def find_streams_affecting_goal(
             for op in output_predicates:
                 if op in stream_domain_predicates:
                     direct_dependencies[s.name].add(t.name)
+            output_types = []
+            for opt in t.output_restrictions:
+                if opt is not None:
+                    output_types += opt
+            for opt in output_types:
+                if opt in stream_domain_types:
+                    direct_dependencies[s.name].add(t.name)
 
         if len(unsatisfied_predicates) == 0:
             bindable[s.name] = True
 
+    print("bindable: ", bindable)
+    print("direct deps: ", direct_dependencies)
+
     # check which streams the goal depends on *directly*
     for t in streams:
-        symbol_to_type = get_symbol_to_type(domain, State(t.certificates))
+        # symbols = get_symbols_from_facts(t.certificates)
+        # symbol_to_type = {s: env.get_object_type(s) for s in symbols}
+        # symbol_to_type = get_symbol_to_type(domain, State(t.certificates))
+
+        symbol_to_type = {
+            parm: typ[0] for parm, typ in zip(t.formal_outputs, t.output_restrictions)
+        }
         print(f"Stream {t.name} output types: {symbol_to_type}")
-        # TODO: parent env
-        child_env = Environment(None, t.formal_outputs, symbol_to_type)
+        child_env = Environment(env, t.formal_outputs, symbol_to_type)
 
         # TODO: handle streams with multiple outputs
         assert isinstance(t.formal_outputs[0], Symbol)

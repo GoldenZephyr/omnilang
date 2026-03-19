@@ -61,6 +61,8 @@ def generated_stream_symbols_to_clingo_placeholders(env: Environment, state: Sta
     """Clingo boilerplate for each symbol that a stream might generate"""
     clingo_lines = []
     for s in env.get_symbols():
+        if not isinstance(s, oml.Symbol):
+            continue
         if "generator" not in env.get_metadata_for_symbol(s):
             continue
         t = env.get_object_type(s)

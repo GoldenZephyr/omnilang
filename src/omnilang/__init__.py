@@ -36,6 +36,7 @@ from omnilang.construct_problem import (
     load_full_domain,
     get_problem_for_goal,
     generate_unsatisfying_consistent_world,
+    generate_bindable_world,
 )
 from omnilang.parse_goal import parse_goal_string
 from omnilang.parse_streams import parse_stream_file
