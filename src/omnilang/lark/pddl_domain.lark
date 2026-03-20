@@ -29,11 +29,13 @@ effect: ":effect" formula
 
 atom: "(" NAME term* ")"
 
-term: var | NAME
-var: "?" NAME
+term: group_var | var | NAME
 
-taggable_var: var | typed_var
-typed_var: var "-" NAME
+var: "?" NAME
+group_var: "&" NAME
+
+taggable_var: group_var | var | typed_var
+typed_var: (group_var | var) "-" NAME
 
 NAME: /[a-zA-Z_][a-zA-Z0-9_-]*/
 

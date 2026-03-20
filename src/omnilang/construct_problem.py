@@ -57,7 +57,12 @@ class Problem:
 def load_full_domain(
     pddl_domain_path: str, stream_path: str, stream_functions: dict[str, callable] = {}
 ):
-    streams, derived_stream_facts = parse_stream_file(stream_path)
+    if stream_path is not None:
+        streams, derived_stream_facts = parse_stream_file(stream_path)
+    else:
+        streams = []
+        derived_stream_facts = []
+
     print(streams)
     for s in streams:
         if s.name in stream_functions:

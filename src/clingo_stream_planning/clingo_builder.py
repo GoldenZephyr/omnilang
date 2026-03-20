@@ -14,7 +14,11 @@ import os
 
 
 def problem_to_clingo(
-    domain: FullDomain, env: Environment, problem: Problem, incremental=False
+    domain: FullDomain,
+    env: Environment,
+    problem: Problem,
+    incremental=False,
+    enable_group_actions=True,
 ):
     """Turn a domain, environment, and problem into an encoding that Clingo can solve"""
     pddl_problem = oml.build_pddl_problem(
@@ -57,7 +61,13 @@ def problem_to_clingo(
     )
     stream_augmentation = [s + "\n" for s in stream_augmentation]
 
-    return original_encoding + stream_augmentation
+    if enable_group_actions:
+        group_action_clingo = generate_group_action_clingo(domain)
+    else:
+        group_action_clingo = []
+    group_action_clingo = [s + "\n" for s in group_action_clingo]
+
+    return original_encoding + stream_augmentation + group_action_clingo
 
 
 def to_clingo_type_string(var, type):
@@ -218,13 +228,11 @@ def derive_initial_states(derived_facts: list[oml.DerivedStreamFacts]):
             input_type_restrictions + input_realization_constraints + domain_constraints
         )
 
+        formal_args = tuple(s.identifier.upper() for s in df.formal_params)
+        formal_args_str = ", ".join((f'"{df.name}"',) + formal_args)
+        stream_derived = f"""stream_derived({formal_args_str}) :- {stream_applicability_constraint}."""
+        output_clingo.append(stream_derived)
         for cert in df.certificates:
-            formal_args = tuple(s.identifier.upper() for s in df.formal_params)
-            formal_args_str = ", ".join((f'"{df.name}"',) + formal_args)
-
-            stream_derived = f"""stream_derived({formal_args_str}) :- {stream_applicability_constraint}."""
-            output_clingo.append(stream_derived)
-
             predicate = f'"{cert.head}"'
             fact_body = tuple(s.identifier.upper() for s in cert.body)
             initial_state = "true"
@@ -240,6 +248,148 @@ def derive_initial_states(derived_facts: list[oml.DerivedStreamFacts]):
             output_clingo.append(static_fact)
 
     return output_clingo
+
+
+def is_group_param(s: oml.Symbol):
+    return s.identifier.startswith("&")
+
+
+def group_action_to_clingo(action: oml.LiftedAction):
+    action_list = [f'"{action.name}"'] + [
+        p.identifier[1:].upper() for p in action.params
+    ]
+    action_string = ", ".join(action_list)
+    action_header = f"action(({action_string}))"
+
+    input_type_restrictions = []
+    input_realization_constraints = []
+    input_group_constraints = []
+    for p, r in zip(action.params, action.param_restrictions):
+        if len(r) != 1:
+            raise Exception(
+                f"Currently only support one input (type) restriction for actions. Stream {action.name} has input {p} with restrictions {r}"
+            )
+        input_type_restrictions.append(
+            to_clingo_type_string(p.identifier.upper()[1:], r[0])
+        )
+        input_realization_constraints.append(f"inworld({p.identifier.upper()[1:]})")
+        if is_group_param(p):
+            input_group_constraints.append(f"group({p.identifier.upper()[1:]})")
+
+    action_applicability_constraint = ", ".join(
+        input_type_restrictions
+        + input_realization_constraints
+        + input_group_constraints
+    )
+    clingo_lines = [f"action({action_header}) :- {action_applicability_constraint}."]
+
+    for constraint in action.precondition:
+        predicate = f'"{constraint.head}"'
+        fact_body = tuple(s.identifier.upper() for s in constraint.body)
+        group_syms = [s for s in constraint.body if is_group_param(s)]
+        if isinstance(constraint, oml.Fact):
+            condition = "true"
+        else:
+            assert isinstance(constraint, oml.NegatedFact)
+            condition = "false"
+
+        lifted_fact_body = []
+        idx = 0
+        for f in fact_body:
+            if f.startswith("&"):
+                lifted_fact_body.append(f"Y{idx}")
+                idx += 1
+            else:
+                if f.startswith("?"):
+                    f = f[1:]
+                lifted_fact_body.append(f)
+
+        lifted_fact = [predicate] + lifted_fact_body
+        lifted_fact_str = ", ".join(lifted_fact)
+        var = f"""variable(({lifted_fact_str}))"""
+
+        requirements = [f"action({action_header})"]
+        for idx, gs in enumerate(group_syms):
+            requirements.append(f"ingroup({gs.identifier.upper()[1:]}, Y{idx})")
+        requirements_str = ", ".join(requirements)
+        clingo_lines.append(
+            f"precondition({action_header}, {var}, value({var}, {condition})) :- {requirements_str}."
+        )
+
+    for constraint in action.positive_effect:
+        predicate = f'"{constraint.head}"'
+        fact_body = tuple(s.identifier.upper() for s in constraint.body)
+        group_syms = [s for s in constraint.body if is_group_param(s)]
+
+        lifted_fact_body = []
+        idx = 0
+        for f in fact_body:
+            if f.startswith("&"):
+                lifted_fact_body.append(f"Y{idx}")
+                idx += 1
+            else:
+                if f.startswith("?"):
+                    f = f[1:]
+                lifted_fact_body.append(f)
+
+        lifted_fact = [predicate] + lifted_fact_body
+        lifted_fact_str = ", ".join(lifted_fact)
+        var = f"""variable(({lifted_fact_str}))"""
+
+        requirements = [f"action({action_header})"]
+        for idx, gs in enumerate(group_syms):
+            requirements.append(f"ingroup({gs.identifier.upper()[1:]}, Y{idx})")
+        requirements_str = ", ".join(requirements)
+
+        clingo_lines.append(
+            f"postcondition({action_header}, {var}, value({var}, true)) :- {requirements_str}."
+        )
+    for constraint in action.negative_effect:
+        predicate = f'"{constraint.head}"'
+        fact_body = tuple(s.identifier.upper() for s in constraint.body)
+        group_syms = [s for s in constraint.body if is_group_param(s)]
+
+        lifted_fact_body = []
+        idx = 0
+        for f in fact_body:
+            print("F: ", f)
+            if f.startswith("&"):
+                lifted_fact_body.append(f"Y{idx}")
+                idx += 1
+            else:
+                print("not &")
+                if f.startswith("?"):
+                    print("starts ?")
+                    f = f[1:]
+                print(f)
+                lifted_fact_body.append(f)
+
+        lifted_fact = [predicate] + lifted_fact_body
+        lifted_fact_str = ", ".join(lifted_fact)
+        var = f"""variable(({lifted_fact_str}))"""
+
+        requirements = [f"action({action_header})"]
+        for idx, gs in enumerate(group_syms):
+            requirements.append(f"ingroup({gs.identifier.upper()[1:]}, Y{idx})")
+        requirements_str = ", ".join(requirements)
+        clingo_lines.append(
+            f"postcondition({action_header}, {var}, value({var}, false)) :- {requirements_str}."
+        )
+
+    return clingo_lines
+
+
+def generate_group_action_clingo(domain: FullDomain):
+    clingo_lines = [
+        """
+{ingroup(X, Y)} :- group(X), has(X, type(T)), has(Y, type(T)), not group(Y).
+inworld(Y) :- group(X), ingroup(X, Y), inworld(X).
+    """
+    ]
+    for action in domain.pddl_domain.group_actions:
+        clingo_lines += group_action_to_clingo(action)
+
+    return clingo_lines
 
 
 def generate_stream_clingo(
@@ -282,14 +432,14 @@ def generate_stream_clingo(
 
     # Necessary to enforce that the span of the belief state is contained within the goal.
 
-    output_clingo += ["#show goal/2."]
+    # output_clingo += ["#show goal/2."]
     output_clingo += [
         'pholds(Val) :- holds(derivedVariable("derived-predicate-1"), Val, 0).'
     ]
-    output_clingo += ["#show pholds/1."]
+    # output_clingo += ["#show pholds/1."]
 
     output_clingo += ["zholds(Val) :- holds(Var, Val, 0)."]
-    output_clingo += ["#show zholds/1."]
+    # output_clingo += ["#show zholds/1."]
 
     if incremental:
         output_clingo += ["#program bsp_restriction."]
@@ -301,8 +451,8 @@ def generate_stream_clingo(
 
     # output_clingo += ["#show inworld/1."]
     # output_clingo += ["#show fromstream/1."]
-    output_clingo += ["#show holds/3."]
-    output_clingo += ["#show precondition/4."]
+    # output_clingo += ["#show holds/3."]
+    # output_clingo += ["#show precondition/4."]
 
     return output_clingo
 

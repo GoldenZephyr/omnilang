@@ -150,6 +150,10 @@ class ProblemTransformer(Transformer):
         return items
 
 
+def is_group_action(action: LiftedAction):
+    return any(s.identifier.startswith("&") for s in action.params)
+
+
 class DomainTransformer(Transformer):
     def start(self, domain):
         return domain
@@ -160,8 +164,17 @@ class DomainTransformer(Transformer):
         functions = fields[1]
         predicates = fields[2]
         actions = fields[3]
-        requirements = fields[4]
-        return PddlDomain(name, types, functions, predicates, actions, requirements)
+        group_actions = fields[4]
+        requirements = fields[5]
+        return PddlDomain(
+            name,
+            types,
+            functions,
+            predicates,
+            actions,
+            requirements,
+            group_actions=group_actions,
+        )
 
     def domain_body(self, items):
         types = None
@@ -169,6 +182,7 @@ class DomainTransformer(Transformer):
         predicates = None
         requirements = None
         actions = []
+        group_actions = []
         for field, value in items:
             match field:
                 case "types":
@@ -178,12 +192,15 @@ class DomainTransformer(Transformer):
                 case "predicates":
                     predicates = value
                 case "action":
-                    actions.append(value)
+                    if is_group_action(value):
+                        group_actions.append(value)
+                    else:
+                        actions.append(value)
                 case "requirements":
                     requirements = value
                 case _:
                     raise ValueError(f"Unknown domain section {field}")
-        return types, functions, predicates, actions, requirements
+        return types, functions, predicates, actions, group_actions, requirements
 
     def types(self, items):
         type_to_children = {}
@@ -292,14 +309,17 @@ class DomainTransformer(Transformer):
         # Currently treat variables and nonvariables the same
         return Symbol(f"?{items[0]}")
 
+    def group_var(self, items):
+        return Symbol(f"&{items[0]}")
+
 
 def parse_domain_file(fn):
     with as_file(files(omnilang.lark).joinpath("pddl_domain.lark")) as path:
         with open(path, "r") as fo:
-            stream_grammar = fo.read()
+            domain_grammar = fo.read()
 
-    stream_parser = Lark(
-        stream_grammar,
+    domain_parser = Lark(
+        domain_grammar,
     )
 
     T = DomainTransformer()
@@ -307,9 +327,9 @@ def parse_domain_file(fn):
     with open(fn, "r") as fo:
         streams = fo.read()
 
-    tree = stream_parser.parse(streams)
-    streams = T.transform(tree)
-    return streams
+    tree = domain_parser.parse(streams)
+    domain = T.transform(tree)
+    return domain
 
 
 def parse_problem_file(fn):

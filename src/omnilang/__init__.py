@@ -40,4 +40,4 @@ from omnilang.construct_problem import (
 )
 from omnilang.parse_goal import parse_goal_string
 from omnilang.parse_streams import parse_stream_file
-from omnilang.parse_mdp import parse_problem_file
+from omnilang.parse_mdp import parse_problem_file, parse_domain_file

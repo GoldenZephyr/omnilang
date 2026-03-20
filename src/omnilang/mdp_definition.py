@@ -44,11 +44,12 @@ class PddlDomain:
     predicates: list[DomainPredicate]
     actions: list[LiftedAction]
     requirements: Optional[list[str]] = None
+    group_actions: Optional[list[LiftedAction]] = None
 
     def __post_init__(self):
         self.names_to_action = {a.name: a for a in self.actions}
 
-    def to_string(self):
+    def to_string(self, include_group_actions=False):
         lines = [(f"(define (domain {self.name})")]
 
         if self.requirements is not None:
@@ -64,6 +65,10 @@ class PddlDomain:
 
         for action in self.actions:
             lines += indent(1, action.to_pddl_lines())
+
+        if include_group_actions and self.group_actions is not None:
+            for action in self.group_actions:
+                lines += indent(1, action.to_pddl_lines())
 
         lines.append(")")
         return "\n".join(lines)
