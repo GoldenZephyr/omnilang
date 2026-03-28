@@ -63,15 +63,59 @@ def problem_to_clingo(
 
     if enable_group_actions:
         group_action_clingo = generate_group_action_clingo(domain)
+        group_action_clingo += generate_group_types(domain, env, problem)
     else:
         group_action_clingo = []
     group_action_clingo = [s + "\n" for s in group_action_clingo]
 
-    return original_encoding + stream_augmentation + group_action_clingo
+    show_init_state_clingo = generate_show_init_state_clingo()
+    show_init_state_clingo = [s + "\n" for s in show_init_state_clingo]
+
+    return (
+        original_encoding
+        + stream_augmentation
+        + group_action_clingo
+        + show_init_state_clingo
+    )
+
+
+def generate_show_init_state_clingo():
+    helper = "trueInitialState(Var) :- initialState(Var, value(Var, true))."
+    show = "#show trueInitialState/1."
+    return [helper, show]
+
+
+def get_typed_groups(env: Environment, state: oml.State) -> dict[str, str]:
+    id_to_type = {}
+    for f in state.facts:
+        if f.head == "group":
+            group_symbol = f.body[0]
+            group_type = env.get_metadata_for_symbol(group_symbol).get(
+                "group_type", "object"
+            )
+            id_to_type[group_symbol.identifier] = group_type
+    return id_to_type
+
+
+def generate_group_types(domain: FullDomain, env: Environment, problem: Problem):
+    clingo = []
+
+    clingo.append(
+        "has(X, grouptype(T2)) :- has(X, grouptype(T1)), inherits(type(T1), type(T2))."
+    )
+    group_to_type = get_typed_groups(env, problem.initial_state)
+    for group, type in group_to_type.items():
+        clingo.append(f'has(constant("{group}"), grouptype("{type}")).')
+
+    return clingo
 
 
 def to_clingo_type_string(var, type):
     return f'has({var}, type("{type}"))'
+
+
+def to_clingo_group_type_string(var, type):
+    return f'has({var}, grouptype("{type}"))'
 
 
 def generated_stream_symbols_to_clingo_placeholders(env: Environment, state: State):
@@ -175,6 +219,9 @@ def stream_to_clingo(stream: Stream):
         static_clause = f"""{fact_str} :- stream_generated({formal_args_str})."""
         stream_clingo.append(static_clause)
 
+    n = len(formal_args) + len(formal_outputs)
+    stream_clingo.append(f"#show stream_generated/{n + 1}.")
+
     return stream_clingo
 
 
@@ -269,12 +316,18 @@ def group_action_to_clingo(action: oml.LiftedAction):
             raise Exception(
                 f"Currently only support one input (type) restriction for actions. Stream {action.name} has input {p} with restrictions {r}"
             )
-        input_type_restrictions.append(
-            to_clingo_type_string(p.identifier.upper()[1:], r[0])
-        )
-        input_realization_constraints.append(f"inworld({p.identifier.upper()[1:]})")
+
         if is_group_param(p):
+            input_type_restrictions.append(
+                to_clingo_group_type_string(p.identifier.upper()[1:], r[0])
+            )
             input_group_constraints.append(f"group({p.identifier.upper()[1:]})")
+        else:
+            input_type_restrictions.append(
+                to_clingo_type_string(p.identifier.upper()[1:], r[0])
+            )
+
+        input_realization_constraints.append(f"inworld({p.identifier.upper()[1:]})")
 
     action_applicability_constraint = ", ".join(
         input_type_restrictions
@@ -342,7 +395,7 @@ def group_action_to_clingo(action: oml.LiftedAction):
         requirements_str = ", ".join(requirements)
 
         clingo_lines.append(
-            f"postcondition({action_header}, {var}, value({var}, true)) :- {requirements_str}."
+            f"postcondition({action_header}, effect(unconditional), {var}, value({var}, true)) :- {requirements_str}."
         )
     for constraint in action.negative_effect:
         predicate = f'"{constraint.head}"'
@@ -373,7 +426,7 @@ def group_action_to_clingo(action: oml.LiftedAction):
             requirements.append(f"ingroup({gs.identifier.upper()[1:]}, Y{idx})")
         requirements_str = ", ".join(requirements)
         clingo_lines.append(
-            f"postcondition({action_header}, {var}, value({var}, false)) :- {requirements_str}."
+            f"postcondition({action_header}, effect(unconditional), {var}, value({var}, false)) :- {requirements_str}."
         )
 
     return clingo_lines
@@ -382,12 +435,14 @@ def group_action_to_clingo(action: oml.LiftedAction):
 def generate_group_action_clingo(domain: FullDomain):
     clingo_lines = [
         """
-{ingroup(X, Y)} :- group(X), has(X, type(T)), has(Y, type(T)), not group(Y).
+{ingroup(X, Y)} :- group(X), has(X, grouptype(T)), has(Y, type(T)), not group(Y).
 inworld(Y) :- group(X), ingroup(X, Y), inworld(X).
     """
     ]
     for action in domain.pddl_domain.group_actions:
         clingo_lines += group_action_to_clingo(action)
+
+    clingo_lines.append("#show ingroup/2.")
 
     return clingo_lines
 

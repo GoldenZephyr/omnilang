@@ -2,7 +2,7 @@
   (:domain exploration_test)
 
   (:objects
-        f1 - frontier
+        f1 f2 - frontier
         p1 p2 p3 p4 p5 p6 - place
         o1 - obj
   )
@@ -12,16 +12,17 @@
       (at p1)
 
       (visited p1)
-      ; (visited p2)
-      ; (visited p3)
-      ; (visited p4)
-      ; (visited p5)
+      (visited p2)
+      (visited p3)
+      (visited p4)
+      (visited p5)
       (visited p6)
 
       (hand-free)
       (obj-at o1 p1)
 
       (connected p6 f1)
+      ;(connected p4 f2)
       ;(connected p1 f2)
 
       (connected p1 p2)

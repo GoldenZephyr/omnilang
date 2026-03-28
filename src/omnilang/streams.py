@@ -173,7 +173,9 @@ class Stream:
 
         self.metadata_generator = metadata_generator
 
-    def apply(self, args, environment=None, grounded_outputs=None):
+    def apply(
+        self, args, environment=None, grounded_outputs=None, generate_metadata=True
+    ):
         """grounded_outputs can be passed as an input if it's necessary to make
         the stream's output be consistent across multiple applications, e.g.,
         when reapplying a stream to an updated base environment"""
@@ -189,7 +191,10 @@ class Stream:
         for o, a in zip(self.formal_params, args):
             remapping[o] = a
         grounded_facts = [ground_predicate(c, remapping) for c in self.certificates]
-        metadata = self.generate_metadata(environment, args, grounded_outputs)
+        if generate_metadata:
+            metadata = self.generate_metadata(environment, args, grounded_outputs)
+        else:
+            metadata = {}
 
         return GroundedStream(
             self.name, tuple(args), tuple(grounded_outputs), tuple(grounded_facts)
@@ -233,7 +238,7 @@ class Stream:
         for bindings in ground(self.restrictions, symbols_to_facts.keys(), env=env):
             current_facts = []
             for s in bindings:
-                for f in symbols_to_facts[s]:
+                for f in symbols_to_facts.get(s, []):
                     current_facts.append(f)
             satisfied = True
             r = {f: None for f in self.formal_params}

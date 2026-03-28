@@ -16,6 +16,32 @@ def process_clingo_action(action):
     return (action_name,) + args
 
 
+def get_state_from_clingo(facts):
+    initial_state = []
+    for f in facts:
+        match f.type:
+            case f.type.Function:
+                name = f.name
+                if name != "trueInitialState":
+                    continue
+                var = f.arguments[0]
+                arg0 = var.arguments[0]
+                if arg0.type == f.type.String:
+                    initial_state.append(oml.Fact(arg0.string, []))
+                    continue
+                predicate = arg0.arguments[0].string
+                args = arg0.arguments[1:]
+                initial_state.append(
+                    oml.Fact(
+                        predicate, [oml.Symbol(process_clingo_arg(s)) for s in args]
+                    )
+                )
+            case _:
+                pass
+
+    return set(initial_state)
+
+
 def clingo_solution_to_plan(facts):
     actions = []
     for f in facts:
@@ -23,29 +49,48 @@ def clingo_solution_to_plan(facts):
             case f.type.Function:
                 name = f.name
                 if name != "occurs":
-                    print("skipping ", name)
                     continue
                 action, order = f.arguments
                 actions.append(
                     (order.number, process_clingo_action(action.arguments[0].arguments))
                 )
             case _:
-                print("skipping (not a function)", f)
-                print(type(f))
                 pass
 
-    print("actions: ", actions)
     plan = [t[1] for t in sorted(actions)]
 
     return plan
 
 
+def clingo_solution_to_groupings(facts):
+    groupings = {}
+    for f in facts:
+        match f.type:
+            case f.type.Function:
+                name = f.name
+                if name != "ingroup":
+                    continue
+                group, member = f.arguments
+                group = group.arguments[0].string
+                member = member.arguments[0].string
+                if group not in groupings:
+                    groupings[group] = [member]
+                else:
+                    groupings[group].append(member)
+            case _:
+                pass
+
+    return groupings
+
+
 def get_grounded_io(stream: oml.Stream, clingo_args):
     grounded_args = [
-        oml.Symbol(a[0].string) for a in clingo_args[: len(stream.formal_params)]
+        oml.Symbol(a.arguments[0].string)
+        for a in clingo_args[: len(stream.formal_params)]
     ]
     grounded_outputs = [
-        oml.Symbol(a[0].string) for a in clingo_args[len(stream.formal_params) :]
+        oml.Symbol(a.arguments[0].string)
+        for a in clingo_args[len(stream.formal_params) :]
     ]
     return grounded_args, grounded_outputs
 
@@ -65,7 +110,6 @@ def extend_env_with_clingo_world(
                 if name != "stream_generated":
                     continue
 
-                print("stream-generated fact: ", f)
                 stream_name = f.arguments[0].string
                 stream = domain.lookup_stream(stream_name)
 
@@ -79,6 +123,7 @@ def extend_env_with_clingo_world(
                     grounded_args,
                     environment=None,
                     grounded_outputs=grounded_outputs,
+                    generate_metadata=False,
                 )
                 new_facts += gs.output_facts
 
@@ -95,11 +140,11 @@ def extend_env_with_clingo_world(
             can_apply = all(updated_env.contains(a) for a in s.inputs)
             if can_apply:
                 applied_something = True
-                for sym in s.inputs:
+                for sym in s.output_symbols:
                     new_symbols.append(sym)
                     new_symbols_to_type[sym] = og_generated_env.get_object_type(sym)
                 symbol_metadata = domain.lookup_stream(s.name).generate_metadata(
-                    updated_env, s.inputs, s.output_facts
+                    updated_env, s.inputs, s.output_symbols
                 )
                 for m in symbol_metadata.values():
                     m["generator"] = s
@@ -132,7 +177,7 @@ def solve_clingo_problem(
         fo.writelines(full_clingo)
 
     manager = PlanManager()
-    for horizon in range(max_horizon):
+    for horizon in range(1, max_horizon):
         print("Trying horizon: ", horizon)
         ctl = clingo.Control(["-c", f"horizon={horizon}"])
         ctl.configuration.solve.models = 1
@@ -197,10 +242,6 @@ class PlanManager:
 
     def on_model(self, model):
         atoms = model.symbols(shown=True)
-        print("Model:")
-        for a in atoms:
-            print(a)
-
         self.plans.append(atoms)
 
     def get_next_plan(self):
@@ -213,10 +254,14 @@ class PlanManager:
         env, new_facts = extend_env_with_clingo_world(
             base_env, og_generated_env, domain, self.plans[0]
         )
+        w0_from_clingo = get_state_from_clingo(self.plans[0])
         plan = clingo_solution_to_plan(self.plans[0])
 
         return (
             env,
-            new_facts,
+            oml.State(w0_from_clingo),
             plan,
         )
+
+    def get_groupings(self) -> dict[str, str]:
+        return clingo_solution_to_groupings(self.plans[0])

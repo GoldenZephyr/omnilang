@@ -56,7 +56,7 @@ class DsgEnvironment:
 
     def contains(self, symbol) -> bool:
         return self.dsg.find_node(
-            spark_dsg.NodeSymbol(symbol.identifier[0], int(symbol.identifer[1:]))
+            spark_dsg.NodeSymbol(symbol.identifier[0], int(symbol.identifier[1:]))
         ) is not None or self.dsg.find_node(
             spark_dsg.NodeSymbol(
                 symbol.identifier[0].upper(), int(symbol.identifer[1:])
