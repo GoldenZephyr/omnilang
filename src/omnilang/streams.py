@@ -9,7 +9,12 @@ from omnilang.mdp_states import (
     negate,
 )
 from omnilang.environment import Environment
-from omnilang.mdp_state_operations import ground, ground_predicate, restrict
+from omnilang.mdp_state_operations import (
+    ground,
+    ground_predicate,
+    restrict,
+    ground_with_domain,
+)
 from plum import dispatch
 from math import inf
 from dataclasses import dataclass
@@ -139,6 +144,68 @@ class DerivedStreamFacts:
 
         self.restrictions = restrictions
 
+    def apply(
+        self, args, environment=None, grounded_outputs=None, generate_metadata=True
+    ):
+        """grounded_outputs can be passed as an input if it's necessary to make
+        the stream's output be consistent across multiple applications, e.g.,
+        when reapplying a stream to an updated base environment"""
+
+        assert len(args) == len(self.formal_params)
+
+        remapping = {}
+        for o, a in zip(self.formal_params, args):
+            remapping[o] = a
+        grounded_facts = [ground_predicate(c, remapping) for c in self.certificates]
+        return set(grounded_facts)
+
+    def is_applicable(self, args, symbols_to_facts, env: Environment):
+        if env is not None:
+            # Type check
+            for a, t_exp in zip(args, self.restrictions):
+                t = env.get_object_type(a)
+                if t != t_exp[0]:
+                    return False
+
+        current_facts = []
+        for s in args:
+            if s in symbols_to_facts:
+                for f in symbols_to_facts[s]:
+                    current_facts.append(f)
+        satisfied = True
+        r = {f: None for f in self.formal_params}
+        for formal, val in zip(self.formal_params, args):
+            r[formal] = val
+        grounded_domain = [ground_predicate(d, r) for d in self.domain]
+        for d in grounded_domain:
+            if not consistent_with(d, current_facts):
+                satisfied = False
+                break
+
+        return satisfied
+
+    def get_applicable_args(self, symbols_to_facts, env=None, state=None):
+        applicable_args = []
+        for bindings in ground_with_domain(
+            env, state, self.formal_params, self.restrictions, self.domain
+        ):
+            current_facts = []
+            for s in bindings:
+                for f in symbols_to_facts.get(s, []):
+                    current_facts.append(f)
+            satisfied = True
+            r = {f: None for f in self.formal_params}
+            for formal, val in zip(self.formal_params, bindings):
+                r[formal] = val
+            grounded_domain = [ground_predicate(d, r) for d in self.domain]
+            for d in grounded_domain:
+                if not consistent_with(d, current_facts):
+                    satisfied = False
+                    break
+            if satisfied:
+                applicable_args.append(bindings)
+        return applicable_args
+
 
 class Stream:
     def __init__(
@@ -214,8 +281,15 @@ class Stream:
             metadata = [{} for _ in output_args]
         return {k: v for k, v in zip(output_args, metadata)}
 
-    def is_applicable(self, args, symbols_to_facts):
+    def is_applicable(self, args, symbols_to_facts, env: Environment):
         current_facts = []
+        if env is not None:
+            # Type check
+            for a, t_exp in zip(args, self.restrictions):
+                t = env.get_object_type(a)
+                if t != t_exp[0]:
+                    return False
+        # Efficiently look up subset of state that is relevant here
         for s in args:
             if s in symbols_to_facts:
                 for f in symbols_to_facts[s]:

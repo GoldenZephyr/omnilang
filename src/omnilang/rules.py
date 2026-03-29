@@ -1,4 +1,8 @@
-from omnilang.mdp_states import Fact
+from omnilang.mdp_states import Fact, State
+from omnilang.streams import DerivedStreamFacts, group_facts_by_symbol
+from omnilang.environment import Environment
+import copy
+from typing import Any
 
 
 def apply_transitive_frontier_rule(facts):
@@ -32,7 +36,56 @@ def apply_transitive_frontier_rule(facts):
                 facts.add(new_connection)
 
 
-def apply_rules(facts):
-    # want to apply rule e.g. (connected p1 f1) (connected f1 p2) -> (connected p1 p2)
-    # TODO: generalize...
-    apply_transitive_frontier_rule(facts)
+def merge_dict_of_lists(
+    dol1: dict[Any, list], dol2: dict[Any, list], inplace: bool = False
+):
+    if inplace:
+        d = dol1
+    else:
+        d = copy.deepcopy(dol1)
+    for k, v in dol2.items():
+        if k in d:
+            d[k] += v
+        else:
+            d[k] = v
+    return d
+
+
+def apply_rules_iter(rules: list[DerivedStreamFacts], env: Environment, state: State):
+    added_facts = False
+    for rule in rules:
+        print("Processing: ", rule.name)
+        symbol_to_facts = group_facts_by_symbol(state.facts)
+        applicable_args = rule.get_applicable_args(symbol_to_facts, env, state)
+
+        print("Applicable args: ", applicable_args)
+        for idx, a in enumerate(applicable_args):
+            if not rule.is_applicable(a, symbol_to_facts, env):
+                # shouldn't hit this for monotonic streams, but for
+                # nonmonotonic streams a binding that was previously
+                # possible might become invalid by the time we process it.
+                print("WARNING: nonmonotonic stream detected (?)")
+                continue
+            new_facts = rule.apply(a, environment=env)
+            if new_facts.issubset(state.facts):
+                continue
+            added_facts = True
+            state.facts |= new_facts
+            new_symbol_to_facts = group_facts_by_symbol(new_facts)
+            symbol_to_facts = merge_dict_of_lists(
+                symbol_to_facts, new_symbol_to_facts, inplace=True
+            )
+    return added_facts, state
+
+
+def apply_rules(rules: list[DerivedStreamFacts], env: Environment, state: State):
+    new_state = State(copy.copy(state.facts))
+
+    # NOTE: in general we might want to apply until a fixed point. For now, we will just apply a single iteration
+    # rule_applied = True
+    # while rule_applied:
+    #     rule_applied, new_state = apply_rules_iter(rules, env, new_state)
+
+    rule_applied, new_state = apply_rules_iter(rules, env, new_state)
+
+    return new_state

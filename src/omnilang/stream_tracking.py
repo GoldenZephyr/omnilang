@@ -5,10 +5,10 @@ from omnilang.streams import (
     GroundedStream,
     group_facts_by_symbol,
     add_facts_to_state,
-    get_symbol_to_type,
 )
 from typing import Callable
 import copy
+from omnilang.construct_problem import FullDomain
 
 
 def get_symbol_deps(env, symbol):
@@ -75,6 +75,7 @@ def reapply_streams(
     streams: list[GroundedStream],
     state: State,
     remapping_function: Callable[[Symbol], Symbol],
+    domain: FullDomain,
 ):
     state = copy.deepcopy(state)
     new_symbols = ()
@@ -117,11 +118,12 @@ def reapply_streams(
             #       To handle non-monotonic streams, we probably want to explicitly store the previous topological order
             lifted_stream = stream_defs[s.name]
             symbol_to_facts = group_facts_by_symbol(state.facts)
-            if lifted_stream.is_applicable(remapped_args, symbol_to_facts):
+            if lifted_stream.is_applicable(remapped_args, symbol_to_facts, env):
                 applied_stream = True
                 new_grounded_stream, symbol_metadata = lifted_stream.apply(
                     remapped_args, env, grounded_outputs=s.output_symbols
                 )
+                output_types = [t[0] for t in lifted_stream.output_restrictions]
 
                 ns = new_grounded_stream.output_symbols
                 new_facts = new_grounded_stream.output_facts

@@ -17,7 +17,7 @@ from omnilang.mdp_states import (
     PddlExists,
     PddlForall,
 )
-from omnilang.mdp_state_operations import restrict, push, generate
+from omnilang.mdp_state_operations import restrict, push, generate, ground_with_domain
 from omnilang.mdp_search import update_state
 from omnilang.streams import (
     Stream,

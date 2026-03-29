@@ -12,6 +12,40 @@ time(0..horizon).
 
 holds(Variable, Value, 0) :- initialState(Variable, Value).
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Enforce group constraints
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% holds(variable(("observed", G)), value(variable(("observed", G)), true)) :- group(G), holds(variable("observed", X), value(variable(("observed", X)), true)) : ingroup(G, X).
+
+% "If every group member has the predicate, then the group has it as well"
+% Implicit "3-valued" state for the group, in that:
+% all-elements-true => G
+% all-elements-false => not G
+% otherwise => no value
+holds(variable((P, G)), value(variable((P, G)), true), T) :-
+    group(G),
+    groupable_predicate(P),
+    time(T),
+    holds(variable((P, X)), value(variable((P, X)), true), T) : ingroup(G, X).
+
+holds(variable((P, G)), value(variable((P, G)), false), T) :-
+    group(G),
+    groupable_predicate(P),
+    time(T),
+    holds(variable((P, X)), value(variable((P, X)), false), T) : ingroup(G, X).
+
+% holds(variable((P, G)), value(variable((P, G)), false), T) :-
+%     group(G),
+%     groupable_predicate(P),
+%     time(T),
+%     not holds(variable((P, G)), value(variable((P, G)), true), T).
+
+% "If an action affects a group, causally update all member elements"
+caused(variable((Pred, Y)), value(variable((Pred, Y)), Val), T) :- occurs(Action, T), postcondition(Action, Effect, variable((Pred, G)), value(variable((Pred, G)), Val)), group(G), ingroup(G, Y).
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Compute derived predicates
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -72,11 +106,11 @@ holds(variable(V), Value, T) :- holds(variable(V), Value, T - 1), not modified(v
 #show occurs/2.
 % #show satisfied/3.
 % #show holds(derivedVariable("derived-predicate-1"), V, H) : holds(derivedVariable("derived-predicate-1"), V, H).
-print(V,H) :-
-    holds(derivedVariable("derived-predicate-1"), V, H).
+%print(V,H) :-
+%    holds(derivedVariable("derived-predicate-1"), V, H).
 % #show print/2.
-printbad(V,H) :-
-    holds(derivedVariable(derivedVariable("derived-predicate-1")), V, H).
+%printbad(V,H) :-
+%    holds(derivedVariable(derivedVariable("derived-predicate-1")), V, H).
 % #show printbad/2.
 % #show holds/3.
 

@@ -30,7 +30,11 @@
 
     (:action movegroup
         :parameters (?s - place &g - place ?t - place)
-        :precondition (and (at ?s) (not (visited &g)) (reachable ?s &g) (reachable ?s ?t))
+        :precondition (and (at ?s)
+                           (not (visited &g))
+                           ;(reachable ?s &g)
+                           ;(reachable ?s ?t)
+                      )
         :effect (and (not (at ?s))
                      (at ?t)
                      (visited &g)

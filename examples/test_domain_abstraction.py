@@ -65,7 +65,7 @@ else:
 # manager = solve_clingo_problem(domain, env, problem, max_horizon=8)
 
 problem = oml.Problem(s0, problem.goal)
-manager = solve_clingo_problem(domain, generated_env, problem, max_horizon=8)
+manager = solve_clingo_problem(domain, generated_env, problem, max_horizon=2)
 
 if manager is None:
     print("No plan found")

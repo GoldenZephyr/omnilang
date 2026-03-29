@@ -224,7 +224,7 @@ def get_problem_for_goal(
         symbol_to_type = get_symbol_to_type(domain.pddl_domain, planning_representation)
         generated_env = Environment(base_env, generated_symbols, symbol_to_type)
 
-    apply_rules(generated_s0.facts)
+    generated_s0 = apply_rules(domain.derived_stream_facts, generated_env, generated_s0)
     if isinstance(goal, ImproperQuantifiedSet):
         evaled_goal = eval_quantifier(generated_env, goal, generated_s0.facts)
     else:

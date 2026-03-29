@@ -128,7 +128,7 @@ class StreamTransformer(Transformer):
         return items
 
     def variable(self, items):
-        return Symbol(items[0])
+        return Symbol("?" + items[0])
 
     def term(self, items):
         return items[0]

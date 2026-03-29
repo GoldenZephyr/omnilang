@@ -2,3 +2,4 @@
 __pycache__
 omnilang_env/
 *.egg-info/
+*.lp

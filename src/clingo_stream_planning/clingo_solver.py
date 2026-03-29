@@ -110,11 +110,12 @@ def extend_env_with_clingo_world(
                 if name != "stream_generated":
                     continue
 
-                stream_name = f.arguments[0].string
+                args = f.arguments[0]
+                stream_name = args.arguments[0].string
                 stream = domain.lookup_stream(stream_name)
 
                 grounded_args, grounded_outputs = get_grounded_io(
-                    stream, f.arguments[1:]
+                    stream, args.arguments[1:]
                 )
 
                 # We can't compute the metadata here because we aren't
@@ -180,7 +181,7 @@ def solve_clingo_problem(
     for horizon in range(1, max_horizon):
         print("Trying horizon: ", horizon)
         ctl = clingo.Control(["-c", f"horizon={horizon}"])
-        ctl.configuration.solve.models = 1
+        ctl.configuration.solve.models = 13
 
         with as_file(
             files(clingo_stream_planning.encodings).joinpath("sequential-horizon.lp")
@@ -219,7 +220,7 @@ def solve_clingo_problem_incremental(
     # ctl.ground([("instance", [])])
     ctl.ground([("base", [])])
     ctl.ground([("bsp_restriction", [])])
-    ctl.configuration.solve.models = 1
+    ctl.configuration.solve.models = 0
 
     manager = PlanManager()
     for t in range(1, max_horizon + 1):
@@ -244,18 +245,22 @@ class PlanManager:
         atoms = model.symbols(shown=True)
         self.plans.append(atoms)
 
+    def get_next_solution(self):
+        return self.plans[-1]
+
     def get_next_plan(self):
-        plan = clingo_solution_to_plan(self.plans[0])
+        plan = clingo_solution_to_plan(self.get_next_solution())
         return plan
 
     def get_next_plan_and_world(
         self, base_env, og_generated_env, domain: oml.FullDomain
     ):
+        next_sol = self.get_next_solution()
         env, new_facts = extend_env_with_clingo_world(
-            base_env, og_generated_env, domain, self.plans[0]
+            base_env, og_generated_env, domain, next_sol
         )
-        w0_from_clingo = get_state_from_clingo(self.plans[0])
-        plan = clingo_solution_to_plan(self.plans[0])
+        w0_from_clingo = get_state_from_clingo(next_sol)
+        plan = clingo_solution_to_plan(next_sol)
 
         return (
             env,
@@ -264,4 +269,4 @@ class PlanManager:
         )
 
     def get_groupings(self) -> dict[str, str]:
-        return clingo_solution_to_groupings(self.plans[0])
+        return clingo_solution_to_groupings(self.get_next_solution())
