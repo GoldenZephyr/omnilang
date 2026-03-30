@@ -13,6 +13,7 @@ class DsgEnvironment:
     def __init__(self, dsg: spark_dsg.DynamicSceneGraph):
         self.dsg = dsg
         self.dsg_context = DsgContextProvider(dsg)
+        self._type_hierarchy = {}
 
     def attach_metadata(self, symbol, symbol_data):
         self.dsg_context[symbol] = symbol_data
@@ -42,7 +43,7 @@ class DsgEnvironment:
         # )
         return None
 
-    def get_objects_of_type(self, t):
+    def get_objects_of_type(self, t, include_subtypes=True):
         return []
 
     def get_symbols(self) -> set:
@@ -69,8 +70,13 @@ class Environment:
     parent_environment: Optional[Environment | DsgEnvironment]
     symbols: list
     symbol_to_type: dict
+    _type_hierarchy: dict = None
 
     def __post_init__(self):
+        if self.parent_environment is not None and self._type_hierarchy is None:
+            self._type_hierarchy = self.parent_environment._type_hierarchy
+
+        self._descendant_types = self._compute_descendant_types(self._type_hierarchy)
         self.symbol_to_metadata = {}
         self.metadata_to_symbols = {}
         self.type_to_symbols = {}
@@ -78,6 +84,30 @@ class Environment:
             if t not in self.type_to_symbols:
                 self.type_to_symbols[t] = []
             self.type_to_symbols[t].append(s)
+
+        assert len(self._type_hierarchy) > 0
+
+    def is_subclass(self, symbol: Symbol, type: str):
+        # does symbol have a subtype of type?
+        t = self.get_object_type(symbol)
+        return t == type or t in self._descendant_types.get(type, [])
+
+    def _compute_descendant_types(self, type_hierarchy):
+        def get_desc_types(t):
+            types = set(type_hierarchy.get(t, []))
+            for subtype in type_hierarchy.get(t, []):
+                types |= get_desc_types(subtype)
+            return types
+
+        types = type_hierarchy.keys()
+        descendant_types = {}
+        for t in types:
+            descendant_types[t] = []
+
+        for supertype in types:
+            descendant_types[supertype] = get_desc_types(supertype)
+
+        return descendant_types
 
     def get_object_type(self, o):
         if o in self.symbol_to_type:
@@ -88,10 +118,19 @@ class Environment:
             print(f"WARNING: No type for symbol {o}")
             return None
 
-    def get_objects_of_type(self, t):
-        objects = self.type_to_symbols.get(t, [])
+    def get_objects_of_type(self, query_type, include_subtypes=True):
+        types = [query_type]
+        if include_subtypes:
+            types += self._descendant_types.get(query_type, [])
+
+        objects = []
+        for t in types:
+            objects += self.type_to_symbols.get(t, [])
+
         if self.parent_environment is not None:
-            parent_objects = self.parent_environment.get_objects_of_type(t)
+            parent_objects = self.parent_environment.get_objects_of_type(
+                query_type, include_subtypes
+            )
         else:
             parent_objects = []
         return objects + parent_objects

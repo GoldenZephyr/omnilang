@@ -180,7 +180,7 @@ def forall(unbound_element: str, element_type_restriction: str, fact_template):
     elif isinstance(element_type_restriction, str):
 
         def filt(env, x):
-            return env.get_object_type(x) == element_type_restriction
+            return env.is_subclass(x, element_type_restriction)
 
     return ImproperQuantifiedSet(
         "forall",
@@ -199,7 +199,7 @@ def exists(unbound_element: str, element_type_restriction: str, fact_template):
     elif isinstance(element_type_restriction, str):
 
         def filt(env, x):
-            return env.get_object_type(x) == element_type_restriction
+            return env.is_subclass(x, element_type_restriction)
     else:
         raise Exception(
             f"element_type_restriction must be string or None, not {type(element_type_restriction)}"

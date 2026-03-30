@@ -163,8 +163,7 @@ class DerivedStreamFacts:
         if env is not None:
             # Type check
             for a, t_exp in zip(args, self.restrictions):
-                t = env.get_object_type(a)
-                if t != t_exp[0]:
+                if not env.is_subclass(a, t_exp[0]):
                     return False
 
         current_facts = []
@@ -286,8 +285,7 @@ class Stream:
         if env is not None:
             # Type check
             for a, t_exp in zip(args, self.restrictions):
-                t = env.get_object_type(a)
-                if t != t_exp[0]:
+                if not env.is_subclass(a, t_exp[0]):
                     return False
         # Efficiently look up subset of state that is relevant here
         for s in args:

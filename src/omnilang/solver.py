@@ -154,7 +154,7 @@ def build_pddl_problem(
 ):
     tuple_goal = to_pddl_goal(goal)
     symbols = get_symbols_from_facts(initial_state.facts)
-    print("Initial state: ")
+    #print("Initial state: ")
     for f in initial_state.facts:
         print(f)
     type_to_objects = {}

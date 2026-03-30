@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from omnilang.mdp_states import Predicate, Fact, Symbol
+from omnilang.mdp_states import Fact, Symbol
 from omnilang.mdp_actions import LiftedAction
 from typing import Optional
 from omnilang.utils import indent
@@ -39,7 +39,7 @@ class DomainPredicate(Fact):
 @dataclass
 class PddlDomain:
     name: str
-    types: Optional[list[Predicate]]  # NOTE: wrong type?
+    types: dict[str, list[str]]
     functions: Optional[list]  # NOTE: we don't support functions yet
     predicates: list[DomainPredicate]
     actions: list[LiftedAction]

@@ -131,9 +131,10 @@ def reapply_streams(
                     m["generator"] = new_grounded_stream
 
                 new_symbol_metadata.append(symbol_metadata)
-
-                domain = None
-                new_symbols_to_type |= get_symbol_to_type(domain, State(new_facts))
+                for symbol, type in zip(
+                    new_grounded_stream.output_symbols, output_types
+                ):
+                    new_symbols_to_type[symbol] = type
 
                 state = add_facts_to_state(new_facts, state)
                 new_symbols = new_symbols + ns
