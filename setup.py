@@ -10,5 +10,5 @@ setup(
     package_dir={"": "src"},
     packages=find_packages("src"),
     package_data={"": ["*.yaml", "*.pddl", "*.lark", "*.lp"]},
-    install_requires=[],
+    install_requires=["lark", "clingo"],
 )
