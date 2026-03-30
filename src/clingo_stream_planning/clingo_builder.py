@@ -118,6 +118,7 @@ def generate_group_types(domain: FullDomain, env: Environment, problem: Problem)
     group_to_type = get_typed_groups(env, problem.initial_state)
     for group, type in group_to_type.items():
         clingo.append(f'has(constant("{group}"), grouptype("{type}")).')
+        clingo.append(f'is(constant("{group}"), grouptype("{type}")).')
 
     return clingo
 
@@ -436,7 +437,7 @@ def generate_groupable_predicates(
 def generate_group_action_clingo(domain: FullDomain):
     clingo_lines = [
         """
-{ingroup(X, Y)} :- group(X), has(X, grouptype(T)), has(Y, type(T)), not group(Y).
+{ingroup(X, Y)} :- group(X), is(X, grouptype(T)), has(Y, type(T)), not group(Y).
 inworld(Y) :- group(X), ingroup(X, Y), inworld(X).
 :- inworld(X), fromstream(X), not generated(X).
 #show generated_by/2.
