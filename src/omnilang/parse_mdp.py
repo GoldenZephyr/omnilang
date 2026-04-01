@@ -1,6 +1,11 @@
 from importlib.resources import as_file, files
 import omnilang.lark
-from omnilang.mdp_definition import PddlDomain, DomainPredicate, PddlProblemInstance
+from omnilang.mdp_definition import (
+    PddlDomain,
+    DomainPredicate,
+    PddlProblemInstance,
+    DerivedPredicate,
+)
 from omnilang.mdp_states import (
     Fact,
     NegatedFact,
@@ -13,6 +18,14 @@ from omnilang.mdp_states import (
 )
 from omnilang.mdp_actions import LiftedAction
 from lark import Lark, Transformer
+from omnilang.logical_clauses import (
+    Conjunction,
+    Disjunction,
+    Negation,
+    UniversalQuantifier,
+    ExistentialQuantifier,
+    Implication,
+)
 
 
 class ProblemTransformer(Transformer):
@@ -163,9 +176,10 @@ class DomainTransformer(Transformer):
         types = fields[0]
         functions = fields[1]
         predicates = fields[2]
-        actions = fields[3]
-        group_actions = fields[4]
-        requirements = fields[5]
+        derived_predicates = fields[3]
+        actions = fields[4]
+        group_actions = fields[5]
+        requirements = fields[6]
         return PddlDomain(
             name,
             types,
@@ -174,6 +188,7 @@ class DomainTransformer(Transformer):
             actions,
             requirements,
             group_actions=group_actions,
+            derived_predicates=derived_predicates,
         )
 
     def domain_body(self, items):
@@ -183,6 +198,7 @@ class DomainTransformer(Transformer):
         requirements = None
         actions = []
         group_actions = []
+        derived_predicates = []
         for field, value in items:
             match field:
                 case "types":
@@ -196,11 +212,21 @@ class DomainTransformer(Transformer):
                         group_actions.append(value)
                     else:
                         actions.append(value)
+                case "derived":
+                    derived_predicates.append(value)
                 case "requirements":
                     requirements = value
                 case _:
                     raise ValueError(f"Unknown domain section {field}")
-        return types, functions, predicates, actions, group_actions, requirements
+        return (
+            types,
+            functions,
+            predicates,
+            derived_predicates,
+            actions,
+            group_actions,
+            requirements,
+        )
 
     def types(self, items):
         type_to_children = {}
@@ -228,6 +254,14 @@ class DomainTransformer(Transformer):
         restrictions = [[item[1]] if item[1] is not None else [] for item in items[1:]]
         return DomainPredicate(items[0], symbols, restrictions)
 
+    def derived(self, items):
+        name = items[0]
+        typed_params = items[1]
+        params = [p[0] for p in typed_params]
+        types = [p[1] for p in typed_params]
+        body = items[2]
+        return "derived", DerivedPredicate(name, params, types, body)
+
     def action(self, items):
         name, parameters, precondition, effects = items
         params = [p[0] for p in parameters]
@@ -235,15 +269,15 @@ class DomainTransformer(Transformer):
         positive_effects = []
         negative_effects = []
         match effects:
-            case tuple() | list():
-                for f in effects:
+            case Conjunction():
+                for f in effects.clauses:
                     match f:
                         case Fact():
                             positive_effects.append(f)
                         case NegatedFact():
                             negative_effects.append(negate(f))
                         case _:
-                            raise Exception(f"Unknown action effect type {f})")
+                            raise Exception(f"Unknown action effect type {f}).")
             case Fact():
                 positive_effects.append(effects)
             case NegatedFact():
@@ -252,6 +286,9 @@ class DomainTransformer(Transformer):
                 raise ValueError(
                     f"Unexpected effect type {type(effects)} for {effects}"
                 )
+
+        if isinstance(precondition, Conjunction):
+            precondition = precondition.clauses
 
         return "action", LiftedAction(
             name, params, restrictions, precondition, positive_effects, negative_effects
@@ -270,8 +307,7 @@ class DomainTransformer(Transformer):
         return items[0]
 
     def conjunction(self, items):
-        # TODO: eventually should explicitly represent conjunction
-        return items
+        return Conjunction(items)
 
     def negation(self, items):
         match items[0]:
@@ -280,9 +316,26 @@ class DomainTransformer(Transformer):
             case NegatedFact():
                 return negate(items[0])
             case _:
-                raise ValueError(
-                    f"Currently you can only negate facts, not formulas (tried to negate {items[0]}"
-                )
+                return Negation(items[0])
+
+    def disjunction(self, items):
+        return Disjunction(items)
+
+    def existential(self, items):
+        symbols = [item[0] for item in items[0]]
+        types = [item[1] for item in items[0]]
+        body = items[1]
+        return ExistentialQuantifier(symbols, types, body)
+
+    def universal(self, items):
+        symbols = [item[0] for item in items[0]]
+        types = [item[1] for item in items[0]]
+        body = items[1]
+        return UniversalQuantifier(symbols, types, body)
+
+    def implies(self, items):
+        head, body = items
+        return Implication(head, body)
 
     def atom(self, items):
         return Fact(items[0], items[1:])
@@ -295,6 +348,12 @@ class DomainTransformer(Transformer):
                 return (Symbol(items[0].identifier), items[0].type)
             case _:
                 raise Exception(f"Unknown taggable_var {items[0]}")
+
+    def var_list(self, items):
+        return items
+
+    def taggable_var_list(self, items):
+        return items
 
     def typed_var(self, items):
         return TypedSymbol(items[0].identifier, items[1])
@@ -329,6 +388,7 @@ def parse_domain_file(fn):
 
     tree = domain_parser.parse(streams)
     domain = T.transform(tree)
+    domain.add_derived_predicate_types()
     return domain
 
 

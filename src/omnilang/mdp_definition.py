@@ -4,6 +4,7 @@ from omnilang.mdp_actions import LiftedAction
 from typing import Optional
 from omnilang.utils import indent
 from typing import Any
+from omnilang.logical_clauses import Formula
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,14 @@ class DomainPredicate(Fact):
 
 
 @dataclass
+class DerivedPredicate:
+    name: str
+    params: list[Symbol]
+    types: list[str]
+    body: Formula
+
+
+@dataclass
 class PddlDomain:
     name: str
     types: dict[str, list[str]]
@@ -45,11 +54,12 @@ class PddlDomain:
     actions: list[LiftedAction]
     requirements: Optional[list[str]] = None
     group_actions: Optional[list[LiftedAction]] = None
+    derived_predicates: Optional[list[DerivedPredicate]] = None
 
     def __post_init__(self):
         self.names_to_action = {a.name: a for a in self.actions}
 
-    def to_string(self, include_group_actions=False):
+    def to_string(self, include_group_actions=False, include_derived_predicates=False):
         lines = [(f"(define (domain {self.name})")]
 
         if self.requirements is not None:
@@ -62,6 +72,9 @@ class PddlDomain:
             lines.append(indent(1, "(:functions )"))
 
         lines += indent(1, self._predicates_block_pddl_str())
+
+        if include_derived_predicates:
+            lines += indent(1, self._derived_predicates_block_pddl_str())
 
         for action in self.actions:
             lines += indent(1, action.to_pddl_lines())
@@ -91,8 +104,28 @@ class PddlDomain:
         lines.append(")")
         return lines
 
+    def _derived_predicates_block_pddl_str(self):
+        lines = []
+        for dp in self.derived_predicates:
+            parms_str = " ".join(p.identifier for p in dp.params)
+            lines.append(f"(:derived ({dp.name} {parms_str})")
+            lines.append(indent(1, dp.body.to_pddl_string()))
+            lines.append(")")
+            return lines
+
     def get_action(self, action_name):
         return self.names_to_action.get(action_name, None)
+
+    def add_derived_predicate_types(self):
+        name_to_predicate = {p.head: p for p in self.predicates}
+        for dp in self.derived_predicates:
+            if dp.name in name_to_predicate:
+                pred = name_to_predicate[dp.name]
+                types = [t[0] for t in pred.type_restrictions]
+            else:
+                print("Warning: derived predicate {dp.name} not listed in predicates!")
+                types = ["object"] * len(dp.params)
+            dp.types = types
 
 
 if __name__ == "__main__":

@@ -70,6 +70,9 @@ class Fact:
     def __str__(self):
         return f"({self.head} {' '.join(str(b) for b in self.body)})"
 
+    def get_params_matching(self, f):
+        return [s for s in self.body if f(s)]
+
 
 @dataclass(frozen=True)
 class NegatedFact:
@@ -89,6 +92,9 @@ class NegatedFact:
 
     def to_pddl_string(self):
         return f"(not {negate(self).to_pddl_string()})"
+
+    def get_params_matching(self, f):
+        return [s for s in self.body if f(s)]
 
 
 @dispatch

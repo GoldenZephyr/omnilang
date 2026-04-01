@@ -2,7 +2,7 @@
 
 domain: "(" "define" "(" "domain" NAME ")" domain_body ")"
 
-domain_body: requirements? types? functions? predicates action+
+domain_body: requirements? types? functions? predicates derived* action+
 
 requirements: "(" ":requirements" requirement* ")"
 requirement: ":" NAME
@@ -16,6 +16,8 @@ function_decl: "(" NAME taggable_var* ")"
 predicates: "(" ":predicates" predicate_def+ ")"
 predicate_def: "(" NAME taggable_var* ")"
 
+derived: "(" ":derived" "(" NAME taggable_var_list ")" formula ")"
+
 action: "(" ":action" NAME parameters precondition effect ")"
 
 parameters: ":parameters" "(" taggable_var+ ")"
@@ -26,6 +28,14 @@ effect: ":effect" formula
 ?formula: atom
         | "(" "and" formula+ ")" -> conjunction
         | "(" "not" formula ")" -> negation
+        | "(" "or" formula+ ")" -> disjunction
+        | existential
+        | universal
+        | implies
+
+existential: "(" "exists" "(" taggable_var_list ")" formula ")"
+universal: "(" "forall" "(" taggable_var_list ")" formula ")"
+implies: "(" "implies" formula formula ")"
 
 atom: "(" NAME term* ")"
 
@@ -36,6 +46,10 @@ group_var: "&" NAME
 
 taggable_var: group_var | var | typed_var
 typed_var: (group_var | var) "-" NAME
+
+taggable_var_list: taggable_var*
+var_list: var*
+
 
 NAME: /[a-zA-Z_][a-zA-Z0-9_-]*/
 

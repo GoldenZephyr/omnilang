@@ -83,7 +83,10 @@ caused(Variable, Value, T) :-
 modified(Variable, T) :- caused(Variable, Value, T).
 
 holds(Variable, Value, T) :- caused(Variable, Value, T).
-holds(variable(V), Value, T) :- holds(variable(V), Value, T - 1), not modified(variable(V), T), time(T).
+
+%% Ensure that variables, but not derived variables, are subject to inertia
+%holds(variable(V), Value, T) :- holds(variable(V), Value, T - 1), not modified(variable(V), T), time(T).
+holds(variable(V), Value, T) :- variable(variable(V)), holds(variable(V), Value, T - 1), not modified(variable(V), T), time(T).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Variables and mutex groups
