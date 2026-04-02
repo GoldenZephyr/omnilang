@@ -169,7 +169,12 @@ def extend_env_with_clingo_world(
 
 
 def solve_clingo_problem(
-    domain: oml.FullDomain, env: oml.Environment, problem: oml.Problem, max_horizon=20
+    domain: oml.FullDomain,
+    env: oml.Environment,
+    problem: oml.Problem,
+    min_horizon=1,
+    max_horizon=20,
+    n_models=13,
 ):
     full_clingo = problem_to_clingo(domain, env, problem)
 
@@ -178,10 +183,10 @@ def solve_clingo_problem(
         fo.writelines(full_clingo)
 
     manager = PlanManager()
-    for horizon in range(1, max_horizon):
+    for horizon in range(min_horizon, max_horizon):
         print("Trying horizon: ", horizon)
         ctl = clingo.Control(["-c", f"horizon={horizon}"])
-        ctl.configuration.solve.models = 13
+        ctl.configuration.solve.models = n_models
 
         with as_file(
             files(clingo_stream_planning.encodings).joinpath("sequential-horizon.lp")

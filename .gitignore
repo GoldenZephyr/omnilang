@@ -3,3 +3,5 @@ __pycache__
 omnilang_env/
 *.egg-info/
 *.lp
+domain.pddl
+problem.pddl

@@ -34,7 +34,11 @@ class DsgEnvironment:
 
     def get_metadata_for_symbol(self, symbol: Symbol):
         assert isinstance(symbol, Symbol)
-        return self.dsg_context[symbol.identifier.lower()]
+        print("metadata from base: ", symbol)
+        try:
+            return self.dsg_context[symbol.identifier.lower()]
+        except KeyError:
+            return {}
 
     def get_object_type(self, o):
         print(f"WARNING: Tried to look up type for object {o} in base dsg env")
@@ -56,6 +60,10 @@ class DsgEnvironment:
         return symbols
 
     def contains(self, symbol) -> bool:
+        ns_key = symbol.identifier[0]
+        ns_id = symbol.identifier[1:]
+        if ns_key.isdigit() or not ns_id.isdigit():
+            return None
         return self.dsg.find_node(
             spark_dsg.NodeSymbol(symbol.identifier[0], int(symbol.identifier[1:]))
         ) is not None or self.dsg.find_node(

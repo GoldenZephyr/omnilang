@@ -32,6 +32,7 @@ from omnilang.solver import solve_existential, modal_solve, solve, build_pddl_pr
 from omnilang.construct_problem import (
     FullDomain,
     Problem,
+    augment_planning_representation,
     dsg_to_problem,
     load_full_domain,
     get_problem_for_goal,

@@ -27,6 +27,7 @@ from dataclasses import dataclass
 import math
 import logging
 from typing import Optional
+from dsg_exploration_sim.action_and_states import SimulationState
 
 logger = logging.getLogger(__name__)
 
@@ -55,15 +56,24 @@ class Problem:
 
 
 def load_full_domain(
-    pddl_domain_path: str, stream_path: str, stream_functions: dict[str, callable] = {}
+    pddl_domain_path: str,
+    stream_path: str | list[str],
+    stream_functions: dict[str, callable] = {},
 ):
-    if stream_path is not None:
-        streams, derived_stream_facts = parse_stream_file(stream_path)
-    else:
-        streams = []
-        derived_stream_facts = []
+    streams = []
+    derived_stream_facts = []
+    match stream_path:
+        case str():
+            streams, derived_stream_facts = parse_stream_file(stream_path)
+        case list() | tuple():
+            for fn in stream_path:
+                s, d = parse_stream_file(fn)
+                streams += s
+                derived_stream_facts += d
 
+    print("Streams: ")
     print(streams)
+    print(derived_stream_facts)
     for s in streams:
         if s.name in stream_functions:
             s.metadata_generator = stream_functions[s.name]
@@ -71,31 +81,59 @@ def load_full_domain(
     return FullDomain(pddl_domain, streams, derived_stream_facts)
 
 
-def dsg_to_problem(G, initial_place, include_object_connections=False):
+def augment_planning_representation(
+    G, current_state: SimulationState, planning_rep: State
+):
+    for vn in current_state.visited_nodes:
+        sym = spark_dsg.NodeSymbol(vn).str()
+        planning_rep.facts.add(Fact("visited", [Symbol(sym)]))
+
+    if True:
+        for n in G.base_dsg.get_layer(spark_dsg.DsgLayers.TRAVERSABILITY).nodes:
+            sym = n.id.str()
+            planning_rep.facts.add(Fact("observed", [Symbol(sym)]))
+
+    if len(current_state.held_objects) == 0:
+        planning_rep.facts.add(Fact("hand-free", []))
+
+    for o in current_state.held_objects:
+        sym = spark_dsg.NodeSymbol(o).str().lower()
+        planning_rep.facts.add(Fact("holding", [Symbol(sym)]))
+
+
+def dsg_to_problem(
+    G,
+    initial_place,
+    include_object_connections=False,
+    special_object_categories=["food"],
+    types_as_predicates=False,
+):
     facts = set()
 
     symbol_to_type = {}
 
-    special_object_categories = ["food"]
     for n in G.get_layer(spark_dsg.DsgLayers.OBJECTS).nodes:
         node_layer = n.layer.layer
         node_partition = n.layer.partition
         category = G.get_labelspace(node_layer, node_partition).get_node_category(n)
         symbol = Symbol(n.id.str().lower())
         if category in special_object_categories:
-            facts.add(Fact(category, [symbol]))
-            symbol_to_type[symbol] = category
+            t = category
         else:
-            facts.add(Fact("obj", [symbol]))
-            symbol_to_type[symbol] = "obj"
+            t = "obj"
+
+        symbol_to_type[symbol] = t
+        if types_as_predicates:
+            facts.add(Fact(t, [symbol]))
 
     traversability_layer_key = G.get_layer_key(spark_dsg.DsgLayers.TRAVERSABILITY)
     for n in G.get_layer(spark_dsg.DsgLayers.PLACES).nodes:
         attrs = n.attributes
         if not attrs.is_predicted and not attrs.real_place:
             frontier_symbol = Symbol(n.id.str().lower())
-            facts.add(Fact("frontier", [frontier_symbol]))
             symbol_to_type[frontier_symbol] = "frontier"
+            if types_as_predicates:
+                facts.add(Fact("frontier", [frontier_symbol]))
             # NOTE: currently (3D) Places/Frontiers can't be connected to each other
             for m in n.connections():
                 if G.get_node(m).layer == traversability_layer_key:
@@ -104,8 +142,9 @@ def dsg_to_problem(G, initial_place, include_object_connections=False):
 
     for n in G.get_layer(spark_dsg.DsgLayers.TRAVERSABILITY).nodes:
         place_symbol = Symbol(n.id.str().lower())
-        facts.add(Fact("place", [place_symbol]))
         symbol_to_type[place_symbol] = "place"
+        if types_as_predicates:
+            facts.add(Fact("place", [place_symbol]))
         for m in n.connections():
             if G.get_node(m).layer == traversability_layer_key:
                 ns = spark_dsg.NodeSymbol(m).str().lower()
@@ -135,9 +174,11 @@ def generate_bindable_world(
     domain: FullDomain, env: Environment, state: State, goal: ImproperQuantifiedSet
 ):
     assert goal.quantifier == "exists"
-    relevant_streams = find_streams_affecting_goal(
-        domain.pddl_domain, domain.streams, env, state, goal
-    )
+    print("generating bindable world")
+    # relevant_streams = find_streams_affecting_goal(
+    #     domain.pddl_domain, domain.streams, env, state, goal
+    # )
+    relevant_streams = set(domain.streams)
     generated_s0 = copy.deepcopy(state)
     generated_symbols = get_symbols_from_facts(state.facts)
     symbol_to_type = get_symbol_to_type(domain.pddl_domain, state)
