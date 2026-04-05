@@ -130,7 +130,21 @@ def extend_env_with_clingo_world(
 
                 streams_to_apply.add(gs)
 
-    updated_env = base_env
+    # updated_env = base_env
+    groups = clingo_solution_to_groupings(clingo_facts)
+    updated_env = oml.Environment(
+        base_env, list(groups.keys()), {g: "object" for g in groups}
+    )
+    print("groups: ", groups)
+    for g, elements in groups.items():
+        grouptype = og_generated_env.get_metadata_for_symbol(oml.Symbol(g))[
+            "group_type"
+        ]
+        updated_env.attach_metadata(
+            oml.Symbol(g),
+            {"group_type": grouptype, "elements": [oml.Symbol(e) for e in elements]},
+        )
+
     while len(streams_to_apply) > 0:
         new_streams_to_apply = set()
         applied_something = False

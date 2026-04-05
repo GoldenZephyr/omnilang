@@ -125,6 +125,7 @@ def dsg_to_problem(
         symbol_to_type[symbol] = t
         if types_as_predicates:
             facts.add(Fact(t, [symbol]))
+        facts.add(Fact("observed", [symbol]))
 
     traversability_layer_key = G.get_layer_key(spark_dsg.DsgLayers.TRAVERSABILITY)
     for n in G.get_layer(spark_dsg.DsgLayers.PLACES).nodes:

@@ -19,7 +19,7 @@ def add_object_to_place(
 
     obj.position = place_node.attributes.position + offset
     obj.semantic_label = id_from_label(object_label)
-    object_ns = spark_dsg.NodeSymbol("O", object_idx)
+    object_ns = spark_dsg.NodeSymbol("o", object_idx)
     G.add_node(spark_dsg.DsgLayers.OBJECTS, object_ns.value, obj)
     G.insert_edge(place, object_ns)
 
@@ -74,7 +74,7 @@ if __name__ == "__main__":
         spark_dsg.DsgLayers.TRAVERSABILITY,
         spark_dsg.DsgLayers.OBJECTS,
         edge_color="k",
-        alpha=0.4
+        alpha=0.4,
     )
     # plot_frontiers(G)
     plt.show()

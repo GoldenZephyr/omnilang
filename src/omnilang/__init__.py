@@ -52,3 +52,4 @@ from omnilang.logical_clauses import (
     Implication,
     Bool,
 )
+from omnilang.bsp_manager import BspManager

@@ -126,6 +126,9 @@ class Environment:
             print(f"WARNING: No type for symbol {o}")
             return None
 
+    def get_subtypes_of_type(self, query_type):
+        return self._descendant_types.get(query_type, [])
+
     def get_objects_of_type(self, query_type, include_subtypes=True):
         types = [query_type]
         if include_subtypes:

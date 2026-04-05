@@ -116,6 +116,16 @@ class PddlDomain:
     def get_action(self, action_name):
         return self.names_to_action.get(action_name, None)
 
+    def get_group_types(self):
+        if self.group_actions is None:
+            return None
+        types = []
+        for ga in self.group_actions:
+            for parm, type in zip(ga.params, ga.param_restrictions):
+                if parm.identifier.startswith("&"):
+                    types.append(type[0])
+        return types
+
     def add_derived_predicate_types(self):
         name_to_predicate = {p.head: p for p in self.predicates}
         for dp in self.derived_predicates:

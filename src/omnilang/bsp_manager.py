@@ -12,13 +12,30 @@ def get_output_types(streams: list[oml.Stream]):
     return types
 
 
+def add_groups(env0, s0, groups: dict[str, str]):
+    symbols = [oml.Symbol(k) for k in groups]
+    dummy_types = {k: "object" for k in groups}
+
+    env = oml.Environment(env0, symbols, dummy_types)
+    for groupname, grouptype in groups.items():
+        env.attach_metadata(oml.Symbol(groupname), {"group_type": grouptype})
+    group_facts = set(oml.Fact("group", [oml.Symbol(s)]) for s in groups)
+    s0_aug = oml.State(s0.facts | group_facts)
+    return env, s0_aug
+
+
 class BspManager:
     def __init__(
-        self, domain: oml.FullDomain, env: oml.Environment, problem: oml.Problem
+        self,
+        domain: oml.FullDomain,
+        env: oml.Environment,
+        problem: oml.Problem,
+        enable_groups=True,
     ):
         self.domain = domain
         self.env = env
         self.problem = problem
+        self.enable_groups = enable_groups
 
         self.solutions = {}
 
@@ -26,7 +43,11 @@ class BspManager:
         self.n_models = 10
 
     def get_extra_symbols_at_belief_level(self, belief_level):
-        generateable_types = get_output_types(self.domain.streams)
+        base_generateable_types = get_output_types(self.domain.streams)
+        generateable_types = set(base_generateable_types)
+        # For self-referential streams, a stream might only be able to generate a *subtype* of its listed output type
+        for t in base_generateable_types:
+            generateable_types |= set(self.env.get_subtypes_of_type(t))
 
         extra_symbols = {}
 
@@ -34,6 +55,14 @@ class BspManager:
             for idx in range(belief_level):
                 extra_symbols[oml.Symbol(f"s{t}{idx}")] = t
         return extra_symbols
+
+    def get_group_symbols_at_belief_level(self, belief_level):
+        groups_per_type = 1
+        groups_to_make = {}
+        for t in self.domain.pddl_domain.get_group_types():
+            for idx in range(groups_per_type):
+                groups_to_make[f"group_{t}{idx}"] = t
+        return groups_to_make
 
     def world_fully_generated(self, solution, belief_level):
         new_env, new_facts, plan = solution
@@ -61,11 +90,7 @@ class BspManager:
                 have_found_a_plan = True
                 self.solutions[(belief_level, horizon)] = solution
                 if self.world_fully_generated(solution, belief_level):
-                    # if belief_level > 1:
-                    #    abc
                     break
-                # if generator:
-                #    yield solution
             if have_found_a_plan:
                 current_min_horizon = horizon
 
@@ -76,14 +101,22 @@ class BspManager:
         print(
             f"Searching at (level {level}, horizon {horizon}), with extra symbols {extra_symbols}."
         )
-        generated_env = oml.Environment(self.env, extra_symbols.keys(), extra_symbols)
+        if self.enable_groups:
+            groups_to_add = self.get_group_symbols_at_belief_level(level)
+            env, s0 = add_groups(self.env, self.problem.initial_state, groups_to_add)
+            problem = oml.Problem(s0, self.problem.goal)
+        else:
+            env = self.env
+            problem = self.proble
+
+        generated_env = oml.Environment(env, extra_symbols.keys(), extra_symbols)
         for s in extra_symbols:
             generated_env.attach_metadata(s, {"generator": True})
 
         manager = solve_clingo_problem(
             self.domain,
             generated_env,
-            self.problem,
+            problem,
             min_horizon=horizon,
             max_horizon=horizon + 1,
             n_models=self.n_models,

@@ -11,8 +11,18 @@ Maps:
 
 Domain types:
 [x] myopic
-[ ] search (shows groups)
-[ ] search and pick (no groups
+
+things to try in `simple_myopic`:
+```
+ipython3 -i grid_world.py -- observeall
+ipython3 -i grid_world.py -- goto
+ipython3 -i grid_world.py -- pickup
+ipython3 -i grid_world.py -- getob
+ipython3 -i grid_world.py -- getobj-easy
+```
+
+[x] search (shows groups)
+[ ] search and pick (no groups)
 [ ] search and pick (groups)
 [ ] regions
 [ ] searching regions
