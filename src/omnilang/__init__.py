@@ -2,7 +2,7 @@
 from omnilang.graph_builder import build_test_dsg, build_expanded_test_dsg
 from omnilang.mdp_actions import LiftedAction, GroundedAction, bind_action
 from omnilang.mdp_definition import PddlDomain, PddlProblemInstance, DerivedPredicate
-from omnilang.environment import DsgEnvironment, Environment
+from omnilang.environment import DsgEnvironment, Environment, compute_descendant_types
 from omnilang.mdp_states import (
     Fact,
     Symbol,
@@ -34,6 +34,7 @@ from omnilang.construct_problem import (
     Problem,
     augment_planning_representation,
     dsg_to_problem,
+    dsg_to_region_problem,
     load_full_domain,
     get_problem_for_goal,
     generate_unsatisfying_consistent_world,

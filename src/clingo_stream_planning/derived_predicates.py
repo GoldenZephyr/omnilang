@@ -22,13 +22,6 @@ def generate_derived_predicate_clingo(domain: oml.FullDomain):
     lines = []
     for dp in derived_predicates:
         aux_dp, original_dp = derived_predicate_to_clingo(dp)
-
-        # print("aux dp clingo: ")
-        # for l in aux_dp:  # E: Ambiguous variable name: `l`
-        #    print(l)
-        # print("og dp clingo: ")
-        # for l in original_dp:  # E: Ambiguous variable name: `l`
-        #    print(l)
         lines += aux_dp + original_dp
 
     return lines

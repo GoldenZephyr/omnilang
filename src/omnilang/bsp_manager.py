@@ -73,16 +73,24 @@ class BspManager:
                 return False
         return True
 
-    def search(self, belief_level_bounds, plan_length_bounds, generator=False):
+    def search(
+        self,
+        belief_level_bounds,
+        plan_length_bounds,
+        generator=False,
+        take_first_plan=False,
+    ):
         min_plan_length, max_plan_length = plan_length_bounds
         min_belief_level, max_belief_level = belief_level_bounds
         # search strategy is: Start at belief level B. Increase plan length to max level, or level where world is fully-generated. Then, increase belief level, but keep search level
 
-        current_min_horizon = 1
+        current_min_horizon = plan_length_bounds[0]
 
         have_found_a_plan = False
 
         for belief_level in range(min_belief_level, max_belief_level):
+            if have_found_a_plan and take_first_plan:
+                break
             for horizon in range(current_min_horizon, max_plan_length):
                 solution = self.search_at_level(belief_level, horizon)
                 if solution is None:

@@ -34,14 +34,14 @@ class DsgEnvironment:
 
     def get_metadata_for_symbol(self, symbol: Symbol):
         assert isinstance(symbol, Symbol)
-        print("metadata from base: ", symbol)
+        logger.debug(f"metadata from base: {symbol}")
         try:
             return self.dsg_context[symbol.identifier.lower()]
         except KeyError:
             return {}
 
     def get_object_type(self, o):
-        print(f"WARNING: Tried to look up type for object {o} in base dsg env")
+        logger.debug(f"Tried to look up type for object {o} in base dsg env")
         # raise NotImplementedError(
         #    "Currently you can't rely on the base DSG environment to get symbol types"
         # )
@@ -73,6 +73,24 @@ class DsgEnvironment:
         )
 
 
+def compute_descendant_types(type_hierarchy):
+    def get_desc_types(t):
+        types = set(type_hierarchy.get(t, []))
+        for subtype in type_hierarchy.get(t, []):
+            types |= get_desc_types(subtype)
+        return types
+
+    types = type_hierarchy.keys()
+    descendant_types = {}
+    for t in types:
+        descendant_types[t] = []
+
+    for supertype in types:
+        descendant_types[supertype] = get_desc_types(supertype)
+
+    return descendant_types
+
+
 @dataclass
 class Environment:
     parent_environment: Optional[Environment | DsgEnvironment]
@@ -84,7 +102,7 @@ class Environment:
         if self.parent_environment is not None and self._type_hierarchy is None:
             self._type_hierarchy = self.parent_environment._type_hierarchy
 
-        self._descendant_types = self._compute_descendant_types(self._type_hierarchy)
+        self._descendant_types = compute_descendant_types(self._type_hierarchy)
         self.symbol_to_metadata = {}
         self.metadata_to_symbols = {}
         self.type_to_symbols = {}
@@ -99,23 +117,6 @@ class Environment:
         # does symbol have a subtype of type?
         t = self.get_object_type(symbol)
         return t == type or t in self._descendant_types.get(type, [])
-
-    def _compute_descendant_types(self, type_hierarchy):
-        def get_desc_types(t):
-            types = set(type_hierarchy.get(t, []))
-            for subtype in type_hierarchy.get(t, []):
-                types |= get_desc_types(subtype)
-            return types
-
-        types = type_hierarchy.keys()
-        descendant_types = {}
-        for t in types:
-            descendant_types[t] = []
-
-        for supertype in types:
-            descendant_types[supertype] = get_desc_types(supertype)
-
-        return descendant_types
 
     def get_object_type(self, o):
         if o in self.symbol_to_type:
@@ -154,9 +155,13 @@ class Environment:
         type_to_objects = self.type_to_symbols
         return type_to_objects | parent_type_to_objects
 
-    def attach_metadata(self, symbol, symbol_data: dict[str, Any]):
+    def attach_metadata(self, symbol: Symbol, symbol_data: dict[str, Any]):
         # TODO: Can we attach metadata in this environment to a symbol in an ancestor environment?
-        self.symbol_to_metadata[symbol] = symbol_data
+        assert isinstance(symbol, Symbol)
+        if symbol not in self.symbol_to_metadata:
+            self.symbol_to_metadata[symbol] = symbol_data
+        else:
+            self.symbol_to_metadata[symbol] |= symbol_data
         for metadata_type, metadata_value in symbol_data.items():
             if metadata_type not in self.metadata_to_symbols:
                 self.metadata_to_symbols[metadata_type] = set()
@@ -184,6 +189,7 @@ class Environment:
             output[k] = v
         for k, v in metadata.items():
             output[k] = v
+        output["type"] = self.get_object_type(symbol)
         return output
 
     def contains(self, symbol) -> bool:

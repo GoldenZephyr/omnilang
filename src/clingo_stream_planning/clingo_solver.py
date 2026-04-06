@@ -177,7 +177,7 @@ def extend_env_with_clingo_world(
 
         for nsm in new_symbol_metadata:
             for s, m in nsm.items():
-                updated_env.attach_metadata(s.identifier, m)
+                updated_env.attach_metadata(s, m)
 
     return updated_env, new_facts
 

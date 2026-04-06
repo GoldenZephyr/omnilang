@@ -17,7 +17,7 @@ outputs: ":outputs" var_list
 domain: ":domain" logical_expr
 certified: ":certified" logical_expr
 
-var_list: "(" taggable_var+ ")"
+var_list: "(" taggable_var* ")"
 
 logical_expr: predicate
             | "(" "and" logical_expr+ ")" -> and_expr

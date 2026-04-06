@@ -58,6 +58,10 @@ class PddlDomain:
 
     def __post_init__(self):
         self.names_to_action = {a.name: a for a in self.actions}
+        self.type_to_parent = {}
+        for supertype, subtypes in self.types.items():
+            for st in subtypes:
+                self.type_to_parent[st] = supertype
 
     def to_string(self, include_group_actions=False, include_derived_predicates=False):
         lines = [(f"(define (domain {self.name})")]

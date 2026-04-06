@@ -101,17 +101,13 @@ def augment_planning_representation(
         planning_rep.facts.add(Fact("holding", [Symbol(sym)]))
 
 
-def dsg_to_problem(
-    G,
-    initial_place,
-    include_object_connections=False,
-    special_object_categories=["food"],
-    types_as_predicates=False,
+def objects_to_pddl(
+    G: spark_dsg.DynamicSceneGraph,
+    special_object_categories,
+    include_object_connections,
 ):
-    facts = set()
-
     symbol_to_type = {}
-
+    facts = set()
     for n in G.get_layer(spark_dsg.DsgLayers.OBJECTS).nodes:
         node_layer = n.layer.layer
         node_partition = n.layer.partition
@@ -123,36 +119,7 @@ def dsg_to_problem(
             t = "obj"
 
         symbol_to_type[symbol] = t
-        if types_as_predicates:
-            facts.add(Fact(t, [symbol]))
         facts.add(Fact("observed", [symbol]))
-
-    traversability_layer_key = G.get_layer_key(spark_dsg.DsgLayers.TRAVERSABILITY)
-    for n in G.get_layer(spark_dsg.DsgLayers.PLACES).nodes:
-        attrs = n.attributes
-        if not attrs.is_predicted and not attrs.real_place:
-            frontier_symbol = Symbol(n.id.str().lower())
-            symbol_to_type[frontier_symbol] = "frontier"
-            if types_as_predicates:
-                facts.add(Fact("frontier", [frontier_symbol]))
-            # NOTE: currently (3D) Places/Frontiers can't be connected to each other
-            for m in n.connections():
-                if G.get_node(m).layer == traversability_layer_key:
-                    ns = spark_dsg.NodeSymbol(m).str().lower()
-                    facts.add(Fact("connected", [Symbol(ns), frontier_symbol]))
-
-    for n in G.get_layer(spark_dsg.DsgLayers.TRAVERSABILITY).nodes:
-        place_symbol = Symbol(n.id.str().lower())
-        symbol_to_type[place_symbol] = "place"
-        if types_as_predicates:
-            facts.add(Fact("place", [place_symbol]))
-        for m in n.connections():
-            if G.get_node(m).layer == traversability_layer_key:
-                ns = spark_dsg.NodeSymbol(m).str().lower()
-                facts.add(Fact("connected", [place_symbol, Symbol(ns)]))
-
-    facts.add(Fact("at", [Symbol(initial_place)]))
-    facts.add(Fact("visited", [Symbol(initial_place)]))
 
     trav_layer_key = G.get_layer_key(spark_dsg.DsgLayers.TRAVERSABILITY)
     if include_object_connections:
@@ -167,6 +134,129 @@ def dsg_to_problem(
                             [Symbol(n.id.str().lower()), Symbol(node.id.str().lower())],
                         )
                     )
+    return symbol_to_type, facts
+
+
+def places_to_pddl(G: spark_dsg.SceneGraph):
+    # Primarily for frontiers
+    symbol_to_type = {}
+    facts = set()
+    traversability_layer_key = G.get_layer_key(spark_dsg.DsgLayers.TRAVERSABILITY)
+    for n in G.get_layer(spark_dsg.DsgLayers.PLACES).nodes:
+        attrs = n.attributes
+        if not attrs.is_predicted and not attrs.real_place:
+            frontier_symbol = Symbol(n.id.str().lower())
+            symbol_to_type[frontier_symbol] = "frontier"
+            # NOTE: currently (3D) Places/Frontiers can't be connected to each other
+            for m in n.connections():
+                if G.get_node(m).layer == traversability_layer_key:
+                    ns = spark_dsg.NodeSymbol(m).str().lower()
+                    facts.add(Fact("connected", [Symbol(ns), frontier_symbol]))
+
+    return symbol_to_type, facts
+
+
+def traversability_to_pddl(G: spark_dsg.SceneGraph):
+    symbol_to_type = {}
+    facts = set()
+    traversability_layer_key = G.get_layer_key(spark_dsg.DsgLayers.TRAVERSABILITY)
+    for n in G.get_layer(spark_dsg.DsgLayers.TRAVERSABILITY).nodes:
+        place_symbol = Symbol(n.id.str().lower())
+        symbol_to_type[place_symbol] = "place"
+        for m in n.connections():
+            if G.get_node(m).layer == traversability_layer_key:
+                ns = spark_dsg.NodeSymbol(m).str().lower()
+                facts.add(Fact("connected", [place_symbol, Symbol(ns)]))
+    return symbol_to_type, facts
+
+
+def regions_to_pddl(G: spark_dsg.SceneGraph):
+    symbol_to_type = {}
+    facts = set()
+    for n in G.get_layer(spark_dsg.DsgLayers.ROOMS).nodes:
+        regions_symbol = Symbol(n.id.str().lower())
+        symbol_to_type[regions_symbol] = "region"
+
+    trav_layer_key = G.get_layer_key(spark_dsg.DsgLayers.TRAVERSABILITY)
+    region_layer_key = G.get_layer_key(spark_dsg.DsgLayers.ROOMS)
+    for n in G.get_layer(spark_dsg.DsgLayers.ROOMS).nodes:
+        room_symbol = Symbol(n.id.str().lower())
+        for m in n.connections():
+            node = G.get_node(m)
+            layer = node.layer
+            if layer == trav_layer_key:
+                facts.add(
+                    Fact(
+                        "place-in-region",
+                        [Symbol(node.id.str().lower()), room_symbol],
+                    )
+                )
+            elif layer == region_layer_key:
+                ns = node.id.str().lower()
+                facts.add(Fact("region-connected", [room_symbol, Symbol(ns)]))
+
+    return symbol_to_type, facts
+
+
+def make_type_predicates(symbol_to_type: dict[Symbol, str]):
+    facts = set()
+    for symbol, type in symbol_to_type.items():
+        facts.add(Fact(type, [symbol]))
+    return facts
+
+
+def types_and_facts_from_generators(G, generators):
+    facts = set()
+    symbol_to_type = {}
+
+    for gen in generators:
+        layer_types, layer_facts = gen(G)
+        symbol_to_type |= layer_types
+        facts |= layer_facts
+    return symbol_to_type, facts
+
+
+def dsg_to_region_problem(
+    G,
+    initial_place,
+    special_object_categories=["food"],
+):
+    pddl_generators = [
+        places_to_pddl,
+        traversability_to_pddl,
+        lambda g: objects_to_pddl(g, special_object_categories, True),
+        regions_to_pddl,
+    ]
+    symbol_to_type, facts = types_and_facts_from_generators(G, pddl_generators)
+
+    facts.add(Fact("at", [Symbol(initial_place)]))
+    facts.add(Fact("visited", [Symbol(initial_place)]))
+
+    return symbol_to_type, State(facts)
+
+
+def dsg_to_problem(
+    G,
+    initial_place,
+    include_object_connections=False,
+    special_object_categories=["food"],
+    types_as_predicates=False,
+):
+    pddl_generators = [
+        places_to_pddl,
+        traversability_to_pddl,
+        lambda g: objects_to_pddl(
+            g, special_object_categories, include_object_connections
+        ),
+    ]
+    symbol_to_type, facts = types_and_facts_from_generators(G, pddl_generators)
+
+    facts.add(Fact("at", [Symbol(initial_place)]))
+    facts.add(Fact("visited", [Symbol(initial_place)]))
+
+    if types_as_predicates:
+        type_facts = make_type_predicates(symbol_to_type)
+    facts |= type_facts
 
     return symbol_to_type, State(facts)
 
