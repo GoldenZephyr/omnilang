@@ -52,4 +52,5 @@ from omnilang.logical_clauses import (
     ExistentialQuantifier,
     Implication,
     Bool,
+    simplify,
 )

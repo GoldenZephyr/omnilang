@@ -73,6 +73,9 @@ class Fact:
     def get_params_matching(self, f):
         return [s for s in self.body if f(s)]
 
+    def get_quantified_variables(self):
+        return []
+
 
 @dataclass(frozen=True)
 class NegatedFact:
@@ -95,6 +98,9 @@ class NegatedFact:
 
     def get_params_matching(self, f):
         return [s for s in self.body if f(s)]
+
+    def get_quantified_variables(self):
+        return []
 
 
 @dispatch
