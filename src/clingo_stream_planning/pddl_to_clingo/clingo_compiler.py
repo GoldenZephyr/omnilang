@@ -6,23 +6,29 @@ from clingo_stream_planning.pddl_to_clingo.actions import (
     generate_normal_actions,
     generate_group_actions,
 )
-from clingo_stream_planning.pddl_to_clingo.streams import compile_stream_definitions
+from clingo_stream_planning.pddl_to_clingo.streams import (
+    compile_stream_definitions,
+    compile_stream_instances,
+)
 from clingo_stream_planning.pddl_to_clingo.derived_streams import (
     compile_derived_streams,
 )
 from clingo_stream_planning.pddl_to_clingo.pddl_problem import compile_pddl_instance
+from clingo_stream_planning.pddl_to_clingo.derived_predicates import (
+    generate_derived_predicates,
+)
 
 from dataclasses import dataclass
 
 
 @dataclass
 class ClingoPddlCompilerOptions:
-    enable_streams: bool
-    enable_derived_streams: bool
-    enable_groups: bool
-    enable_optimization: bool
-    enable_static_optimizations: bool
-    enable_incremental: bool
+    enable_streams: bool = True
+    enable_derived_streams: bool = True
+    enable_optimization: bool = True
+    enable_static_optimizations: bool = False
+    enable_groups: bool = False
+    enable_incremental: bool = False
 
 
 def compile_domain(
@@ -35,12 +41,21 @@ def compile_domain(
     applied based on the state
     """
     lines = generate_utils(env, domain, state)
+    lines.append("\n")
     lines += generate_type_hierarchy(env, domain, state)
-    lines += generate_variables(env, domain, state)
-    lines += generate_derived_predicates(
-        env, domain, state
-    )  # TODO: copy from directory above
+    lines.append("\n")
+    lines += generate_variables(
+        env,
+        domain,
+        state,
+        options.enable_static_optimizations,
+        options.enable_derived_streams,
+    )
+    lines.append("\n")
+    lines += generate_derived_predicates(env, domain, state)
+    lines.append("\n")
     lines += generate_normal_actions(env, domain, state)
+    lines.append("\n")
     if options.enable_groups:
         lines += generate_group_actions(env, domain, state)
 
@@ -49,31 +64,49 @@ def compile_domain(
 
 def compile_optimization_objectives(env, domain, state):
     # Currently, generate a plan in the "maximally feasible world"
-    return ["#maximize {1, X : inworld(X)}."]
+    lines = ["% World objective to optimize"]
+    lines += ["#maximize {1, X : inworld(X)}."]
+    return lines
 
 
-# def add_show_statements(options):
-#    return []
+def add_show_statements(options):
+    lines = ["% Facts to show"]
+    lines += ["trueInitialState(Var) :- initialState(Var, value(Var, true))."]
+    lines.append("#show trueInitialState/1.")
+    if options.enable_streams:
+        lines.append("#show generated_by/2.")
+        lines.append("#show inworld/1.")
+        lines.append("#show stream_generated/1.")
+    if options.enable_groups:
+        lines.append("#show ingroup/2.")
+
+    # lines.append("#show w0/1.")
+
+    return lines
 
 
 def compile_problem(
     options: ClingoPddlCompilerOptions,
     env: oml.Environment,
     domain: oml.FullDomain,
-    state: oml.State,
+    problem: oml.Problem,
 ):
     # TODO: need to normalize complex goals into derived streams + simple goal
-    lines = compile_domain(env, domain, state)
+    lines = compile_domain(options, env, domain, problem.initial_state)
     if options.enable_streams:
-        lines += compile_stream_definitions(env, domain, state)
+        lines += compile_stream_definitions(env, domain, problem.initial_state)
+        lines += ["\n"]
     if options.enable_derived_streams:
-        lines += compile_derived_streams(env, domain, state)
+        lines += compile_derived_streams(env, domain, problem.initial_state)
 
-    lines += compile_pddl_instance(env, domain, state)
+    lines += compile_pddl_instance(env, domain, problem)
 
     if options.enable_streams:
-        lines += compile_stream_instances(env, domain, state)
+        lines += compile_stream_instances(env, domain, problem.initial_state)
+        lines += ["\n"]
     if options.enable_optimization:
-        lines += compile_optimization_objectives(env, domain, state)
+        lines += compile_optimization_objectives(env, domain, problem.initial_state)
+        lines += ["\n"]
 
     lines += add_show_statements(options)
+    return lines

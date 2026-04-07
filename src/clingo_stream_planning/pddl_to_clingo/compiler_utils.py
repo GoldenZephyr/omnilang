@@ -19,6 +19,14 @@ def variable_to_clingo(symbol: oml.Symbol) -> str:
     return s
 
 
+def symbol_to_clingo(symbol: oml.Symbol) -> str:
+    if symbol.identifier[0] not in ["?", "&"]:
+        return f'constant("{symbol.identifier}")'
+    else:
+        s = symbol.identifier.upper()
+        return s[1:]
+
+
 def to_clingo_type_string(var, type):
     return f'has({var}, type("{type}"))'
 
@@ -27,8 +35,14 @@ def to_clingo_group_type_string(var, type):
     return f'has({var}, grouptype("{type}"))'
 
 
+def to_w0_constraint(f: oml.Fact):
+    kernel = ", ".join((f'"{f.head}"',) + tuple(symbol_to_clingo(s) for s in f.body))
+    return f"w0(({kernel}))"
+
+
 def get_static_predicates(env, domain: oml.FullDomain, state, include_groups=True):
-    static_predicates = domain.pddl_domain.predicates
+    name_to_pred = {p.head: p for p in domain.pddl_domain.predicates}
+    static_predicates = set(name_to_pred.keys())
     for action in domain.pddl_domain.actions:
         for effect in action.positive_effect + action.negative_effect:
             if effect.head in static_predicates:
@@ -38,4 +52,4 @@ def get_static_predicates(env, domain: oml.FullDomain, state, include_groups=Tru
             for effect in action.positive_effect + action.negative_effect:
                 if effect.head in static_predicates:
                     static_predicates.remove(effect.head)
-    return static_predicates
+    return [name_to_pred[p] for p in static_predicates]

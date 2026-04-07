@@ -3,30 +3,30 @@ from omnilang import Fact, NegatedFact
 from clingo_stream_planning.pddl_to_clingo.compiler_utils import (
     variable_to_clingo,
     to_clingo_type_string,
-    to_lifted_clingo_string,
+    to_w0_constraint,
 )
 
 
 def generate_derived_certificate(kernel: str, certificate: oml.Fact | oml.NegatedFact):
-    predicate = f'"{certificate.head}"'
-    fact_body = tuple(variable_to_clingo(s) for s in certificate.body)
+    # predicate = f'"{certificate.head}"'
+    # fact_body = tuple(variable_to_clingo(s) for s in certificate.body)
+
+    # lifted_fact = (predicate,) + fact_body
+    # lifted_fact_str = ", ".join(lifted_fact)
+    # var = f"""variable(({lifted_fact_str}))"""
+
+    # initialState = f"""initialState({var}, value({var}, {initial_state})) :- stream_derived({kernel})."""
+    # lines = [initialState]
+
+    fact_str = to_w0_constraint(certificate)
     match certificate:
         case oml.Fact():
-            initial_state = "true"
+            static_fact = f"{fact_str} :- stream_derived({kernel})."
         case oml.NegatedFact():
-            initial_state = "false"
+            static_fact = f"-{fact_str} :- stream_derived({kernel})."
         case _:
             raise Exception(f"Unknown thing being certified: {certificate}")
-    lifted_fact = (predicate,) + fact_body
-    lifted_fact_str = ", ".join(lifted_fact)
-    var = f"""variable(({lifted_fact_str}))"""
-
-    initialState = f"""initialState({var}, value({var}, {initial_state})) :- stream_derived(  {kernel})."""
-    lines = [initialState]
-
-    fact = to_lifted_clingo_string(certificate)
-    static_fact = f"{fact} :- stream_derived({kernel})."
-    lines.append(static_fact)
+    lines = [static_fact]
     return lines
 
 
@@ -42,9 +42,9 @@ def generate_derived_stream_applicability(stream):
 
     for f in stream.domain:
         if isinstance(f, Fact):
-            lines.append(to_lifted_clingo_string(f))
+            lines.append(to_w0_constraint(f))
         elif isinstance(f, NegatedFact):
-            lines.append(f"not {to_lifted_clingo_string(f)}")
+            lines.append(f"not {to_w0_constraint(f)}")
     return lines
 
 
@@ -69,8 +69,9 @@ def compile_derived_streams(env, domain: oml.FullDomain, state):
     """Support "derived streams" that add additional static facts"""
     # head(B1, ..., BN) :- type restrictions, domain.
     # initialState(variable(head(B1, ..., BN)), value(variable((head(B1,...,BN))), true)) :- type restrictions, domain.
-    lines = []
+    lines = ["% Derived Streams"]
     for df in domain.derived_stream_facts:
         lines += generate_derived_stream(df)
+        lines[-1] += "\n"
 
     return lines

@@ -161,13 +161,14 @@ if __name__ == "__main__":
     match goaltype:
         case "goto-region":
             target_region = "r6"
-            goal = oml.PartialState(
-                {oml.Fact("in-region", [oml.Symbol(target_region)])}, set()
-            )
+            # goal = oml.PartialState(
+            #    {oml.Fact("in-region", [oml.Symbol(target_region)])}, set()
+            # )
+            goal = oml.Fact("in-region", [oml.Symbol(target_region)])
             goal_str = f"Goto region {target_region}"
             domain_constructor = setup_domain
         case "search-region":
-            target_region = "r8"
+            target_region = "r6"
 
             # NOTE: Ideally we would use this goal, although we don't directly
             # support goals like this yet. Currently observed-region needs to
@@ -176,9 +177,10 @@ if __name__ == "__main__":
             # goal = str_to_goal(
             #     "(forall (?p - place) (implies (place-in-region ?p {target_region}) (observed ?p)))"
             # )
-            goal = oml.PartialState(
-                {oml.Fact("searched-region", [oml.Symbol(target_region)])}, set()
-            )
+            # goal = oml.PartialState(
+            #    {oml.Fact("searched-region", [oml.Symbol(target_region)])}, set()
+            # )
+            goal = oml.Fact("searched-region", [oml.Symbol(target_region)])
             goal_str = f"Search {target_region}"
             domain_constructor = setup_domain
         case _:

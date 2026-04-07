@@ -1,5 +1,9 @@
 import clingo
-from clingo_stream_planning.clingo_builder import problem_to_clingo
+from clingo_stream_planning.clingo_builder import problem_to_clingo  # noqa
+from clingo_stream_planning.pddl_to_clingo.clingo_compiler import (
+    compile_problem,
+    ClingoPddlCompilerOptions,
+)  # noqa
 import clingo_stream_planning.encodings
 import omnilang as oml
 from importlib.resources import as_file, files
@@ -190,11 +194,14 @@ def solve_clingo_problem(
     max_horizon=20,
     n_models=13,
 ):
-    full_clingo = problem_to_clingo(domain, env, problem)
+    # full_clingo = problem_to_clingo(domain, env, problem)
+    options = ClingoPddlCompilerOptions()
+    full_clingo = compile_problem(options, env, domain, problem)
+    clingo_str = "\n".join(full_clingo)
 
     clingo_problem_path = "full_problem.lp"
     with open(clingo_problem_path, "w") as fo:
-        fo.writelines(full_clingo)
+        fo.write(clingo_str)
 
     manager = PlanManager()
     for horizon in range(min_horizon, max_horizon):
@@ -223,7 +230,8 @@ def solve_clingo_problem(
 def solve_clingo_problem_incremental(
     domain: oml.FullDomain, env: oml.Environment, problem: oml.Problem, max_horizon=20
 ):
-    full_clingo = problem_to_clingo(domain, env, problem, incremental=True)
+    # full_clingo = problem_to_clingo(domain, env, problem, incremental=True)
+    full_clingo = compile_problem(domain, env, problem)
 
     clingo_problem_path = "full_problem.lp"
     with open(clingo_problem_path, "w") as fo:

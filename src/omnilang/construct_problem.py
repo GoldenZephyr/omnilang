@@ -256,7 +256,7 @@ def dsg_to_problem(
 
     if types_as_predicates:
         type_facts = make_type_predicates(symbol_to_type)
-    facts |= type_facts
+        facts |= type_facts
 
     return symbol_to_type, State(facts)
 

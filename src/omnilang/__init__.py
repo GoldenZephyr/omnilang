@@ -1,7 +1,12 @@
 # ruff: noqa: F401
 from omnilang.graph_builder import build_test_dsg, build_expanded_test_dsg
 from omnilang.mdp_actions import LiftedAction, GroundedAction, bind_action
-from omnilang.mdp_definition import PddlDomain, PddlProblemInstance, DerivedPredicate
+from omnilang.mdp_definition import (
+    PddlDomain,
+    PddlProblemInstance,
+    DerivedPredicate,
+    DomainPredicate,
+)
 from omnilang.environment import DsgEnvironment, Environment, compute_descendant_types
 from omnilang.mdp_states import (
     Fact,

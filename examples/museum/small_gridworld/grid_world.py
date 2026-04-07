@@ -187,11 +187,17 @@ if __name__ == "__main__":
             goal_str = "Pick up food"
             domain_constructor = setup_domain_simple
         case "getobj":
-            goal = oml.PddlExists(
+            # goal = oml.PddlExists(
+            #    [oml.Symbol("?f")],
+            #    ["food"],
+            #    oml.Fact("obj-at", [oml.Symbol("?f"), oml.Symbol("t0")]),
+            # )
+            goal = oml.ExistentialQuantifier(
                 [oml.Symbol("?f")],
                 ["food"],
                 oml.Fact("obj-at", [oml.Symbol("?f"), oml.Symbol("t0")]),
             )
+
             goal_str = "Bring food to origin"
             domain_constructor = setup_domain_simple
         case "getobj-easy":

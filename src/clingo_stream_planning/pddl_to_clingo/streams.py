@@ -1,21 +1,36 @@
 from omnilang import (
     Stream,
-    Environment,
-    State,
     Fact,
     NegatedFact,
 )
 import omnilang as oml
-from clingo_stream_planning.clingo_utils import (
+from clingo_stream_planning.pddl_to_clingo.compiler_utils import (
     to_lifted_clingo_string,
     variable_to_clingo,
     to_clingo_type_string,
+    to_w0_constraint,
 )
 
 
-def generated_stream_symbols_to_clingo_placeholders(env: Environment, state: State):
+def compile_stream_definitions(env, domain: oml.FullDomain, state):
+    lines = ["% Streams"]
+
+    for s in domain.streams:
+        # Define each stream
+        lines += stream_to_clingo(s)
+        lines += ["\n"]
+    # Ensure unique generation
+    lines += make_general_stream_constraints()
+    # Support derived streams
+    # for ds in domain.derived_stream_facts:
+    #     lines += derived_stream_to_clingo(ds)
+    lines += [":- goal(Variable, Value), holds(Variable, Value, 0)."]
+    return lines
+
+
+def compile_stream_instances(env: oml.Environment, domain, state: oml.State):
     """Clingo boilerplate for each symbol that a stream might generate"""
-    clingo_lines = []
+    clingo_lines = ["% Stream-generated Variables"]
     for s in env.get_symbols():
         if not isinstance(s, oml.Symbol):
             continue
@@ -32,8 +47,6 @@ def generated_stream_symbols_to_clingo_placeholders(env: Environment, state: Sta
         fromstream = f'fromstream(constant("{sid}")).'
         maybe_inworld = f'{{inworld(constant("{sid}"))}}.'
         clingo_lines += [decl, typed, fromstream, maybe_inworld]
-    inworld_is_caused = ":- inworld(O), fromstream(O), not generated(O)."
-    clingo_lines.append(inworld_is_caused)
 
     return clingo_lines
 
@@ -41,20 +54,24 @@ def generated_stream_symbols_to_clingo_placeholders(env: Environment, state: Sta
 def generate_stream_certificates(stream_kernel: str, certificates: list[oml.Fact]):
     lines = []
     for fact in certificates:
-        predicate = f'"{fact.head}"'
-        fact_body = tuple(variable_to_clingo(s) for s in fact.body)
+        # predicate = f'"{fact.head}"'
+        # fact_body = tuple(variable_to_clingo(s) for s in fact.body)
 
-        initial_state = "true"
-        lifted_fact = (predicate,) + fact_body
-        lifted_fact_str = ", ".join(lifted_fact)
-        var = f"""variable(({lifted_fact_str}))"""
+        # initial_state = "true"
+        # lifted_fact = (predicate,) + fact_body
+        # lifted_fact_str = ", ".join(lifted_fact)
+        # var = f"""variable(({lifted_fact_str}))"""
 
-        lines.append(
-            f"""initialState({var}, value({var}, {initial_state})) :- stream_generated(({stream_kernel}))."""
-        )
+        # lines.append(
+        #    f"""initialState({var}, value({var}, {initial_state})) :- stream_generated(({stream_kernel}))."""
+        # )
 
-        fact_str = to_lifted_clingo_string(fact)
-        lines.append(f"""{fact_str} :- stream_generated(({stream_kernel})).""")
+        fact_str = to_w0_constraint(fact)
+        match fact:
+            case oml.Fact():
+                return [f"""{fact_str} :- stream_generated(({stream_kernel}))."""]
+            case oml.NegatedFact():
+                return [f"""-{fact_str} :- stream_generated(({stream_kernel}))."""]
     return lines
 
 
@@ -110,7 +127,17 @@ def generate_generation_constraint(kernel: str, stream: oml.Stream):
     output_type_restrictions_str = ", ".join(output_type_restrictions)
 
     restrictions = get_input_restrictions(stream)
-    stream_applicability_constraint = ", ".join(restrictions)
+
+    domain_constraints = []
+    for f in stream.domain:
+        if isinstance(f, Fact):
+            domain_constraints.append(to_w0_constraint(f))
+        elif isinstance(f, NegatedFact):
+            domain_constraints.append(f"not {to_w0_constraint(f)}")
+        else:
+            raise TypeError(f"Unexpected stream domain element: {f}")
+
+    stream_applicability_constraint = ", ".join(restrictions + domain_constraints)
 
     max_generations = 1
     generation_constraint = f"""{{stream_generated(({kernel})) : {output_type_restrictions_str}}} <= {max_generations} :- {stream_applicability_constraint}."""
@@ -124,7 +151,7 @@ def stream_to_clingo(stream: Stream):
     kernel_str = ", ".join((f'"{stream.name}"',) + formal_args + formal_outputs)
 
     # {Chosen(stream(θ))} ← θ ∈ Dom(stream; ˆW )
-    lines = generate_generation_constraint(stream)
+    lines = generate_generation_constraint(kernel_str, stream)
 
     # Track which stream generates which variable
     lines += generate_stream_generation_tracking(kernel_str, stream.formal_outputs)
@@ -142,23 +169,13 @@ def make_general_stream_constraints():
 
     inworld_tracking = "inworld(X) :- generated_by(X, _)."
     inworld_default = 'inworld(X) :- not fromstream(X), has(X, type("object")).'
+    inworld_is_caused = ":- inworld(O), fromstream(O), not generated(O)."
 
-    clingo_lines = [stream_consistency, inworld_tracking, inworld_default]
+    clingo_lines = [
+        "% Enforcing Stream Consistency",
+        stream_consistency,
+        inworld_tracking,
+        inworld_default,
+        inworld_is_caused,
+    ]
     return clingo_lines
-
-
-def compile_stream_definitions(env, domain: oml.FullDomain, state):
-    streams = domain.streams
-
-    lines = ["% Streams"]
-
-    for s in streams:
-        # Define each stream
-        lines += stream_to_clingo(s)
-        lines += ["\n"]
-    # Ensure unique generation
-    lines += make_general_stream_constraints()
-    # Support derived streams
-    lines += derive_initial_states(domain.derived_stream_facts)
-    lines += [":- goal(Variable, Value), holds(Variable, Value, 0)."]
-    return lines

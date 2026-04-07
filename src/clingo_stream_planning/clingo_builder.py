@@ -129,7 +129,8 @@ def generate_optimization_clingo(
 def generate_show_init_state_clingo():
     helper = "trueInitialState(Var) :- initialState(Var, value(Var, true))."
     show = "#show trueInitialState/1."
-    return [helper, show]
+    lines = [helper, show]
+    return lines
 
 
 def get_typed_groups(env: Environment, state: oml.State) -> dict[str, str]:

@@ -32,19 +32,12 @@ def generate_action_preconditions(
         return f.head in static_predicates
 
     lines = []
-    for fact in action.precondition.positive_facts:
+    for fact in action.precondition:
         if is_static(fact):
             continue
         lines += generate_action_precondition(
             action_nugget,
             fact,
-        )
-    for fact in action.precondition.negative_facts:
-        if is_static(fact):
-            continue
-        lines += generate_action_precondition(
-            action_nugget,
-            oml.negate(fact),
         )
 
     return lines
@@ -100,9 +93,9 @@ def parms_and_types_to_kernel_and_constraints(
     param_types: list,
     include_inworld_constraints: bool = True,
 ):
-    nugget = (name,)
+    kernel = (f'"{name}"',)
     for p in params:
-        nugget += variable_to_clingo(p)
+        kernel += (variable_to_clingo(p),)
 
     types = []
     if len(param_types) > 0 and isinstance(param_types[0], list):
@@ -120,11 +113,11 @@ def parms_and_types_to_kernel_and_constraints(
     type_strings = []
     for p, t in zip(params, types):
         var = variable_to_clingo(p)
-        type_strings.append(to_clingo_type_string(var, type))
+        type_strings.append(to_clingo_type_string(var, t))
         if include_inworld_constraints:
-            type_strings.append("inworld({var})")
+            type_strings.append(f"inworld({var})")
 
-    return nugget, type_strings
+    return kernel, type_strings
 
 
 # ("str", P1, P2) is the "kernel"
@@ -163,6 +156,7 @@ def generate_normal_actions(
         static_predicates = set()
     for action in domain.pddl_domain.actions:
         lines += generate_action(static_predicates, action)
+        lines[-1] += "\n"
     return lines
 
 

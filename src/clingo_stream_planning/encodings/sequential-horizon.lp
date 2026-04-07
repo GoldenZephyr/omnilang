@@ -36,12 +36,6 @@ holds(variable((P, G)), value(variable((P, G)), false), T) :-
     time(T),
     holds(variable((P, X)), value(variable((P, X)), false), T) : ingroup(G, X).
 
-% holds(variable((P, G)), value(variable((P, G)), false), T) :-
-%     group(G),
-%     groupable_predicate(P),
-%     time(T),
-%     not holds(variable((P, G)), value(variable((P, G)), true), T).
-
 % "If an action affects a group, causally update all member elements"
 caused(variable((Pred, Y)), value(variable((Pred, Y)), Val), T) :- occurs(Action, T), postcondition(Action, Effect, variable((Pred, G)), value(variable((Pred, G)), Val)), group(G), ingroup(G, Y).
 
