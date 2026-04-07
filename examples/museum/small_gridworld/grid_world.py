@@ -16,6 +16,7 @@ from dsg_exploration_sim.simulator import add_frontiers
 from dsg_exploration_sim.derived_dsg import DerivedDsg
 import matplotlib.pyplot as plt
 from dsg_exploration_sim.action_and_states import SimulationState
+from search_manager import BspManager
 
 
 import sys
@@ -35,7 +36,7 @@ def get_env_and_state(Gobs, sim_state, domain):
     return env, pddl_s0
 
 
-def plot_solution(G, Gobs, sim_state, new_env, plan):
+def plot_solution(G, Gobs, sim_state, new_env, new_state, plan):
     labels_for_legend = plot_dsg(G, 0.4)
     labels_for_legend = layer_to_name(G, labels_for_legend, new_prefix="gt-")
     obs_labels = plot_dsg(Gobs)
@@ -44,7 +45,9 @@ def plot_solution(G, Gobs, sim_state, new_env, plan):
     plot_state(Gobs, sim_state)
     plan_labels = plot_plan_in_env(new_env, Gobs, plan)
     labels_for_legend |= plan_labels
-    gen_label_to_line = plot_generated_env(new_env, {"food": ">", "place": "p"})
+    gen_label_to_line = plot_generated_env(
+        new_env, new_state, {"food": ">", "place": "p"}
+    )
     labels_for_legend |= gen_label_to_line
     lines = labels_for_legend.values()
     labels = labels_for_legend.keys()
@@ -98,7 +101,7 @@ def setup_domain_simple(Gobs, sim_state):
 
     def construct_bsp(goal):
         problem = oml.Problem(pddl_s0, goal)
-        bpm = oml.BspManager(domain, env, problem)
+        bpm = BspManager(domain, env, problem)
         return bpm
 
     return construct_bsp
@@ -120,7 +123,7 @@ def setup_domain_observeall(Gobs, sim_state):
 
     def construct_bsp(goal):
         problem = oml.Problem(pddl_s0, goal)
-        bpm = oml.BspManager(domain, env, problem)
+        bpm = BspManager(domain, env, problem)
         return bpm
 
     return construct_bsp
@@ -142,7 +145,7 @@ def setup_domain_modal_pick(Gobs, sim_state):
 
     def construct_bsp(goal):
         problem = oml.Problem(pddl_s0, goal)
-        bpm = oml.BspManager(domain, env, problem)
+        bpm = BspManager(domain, env, problem)
         return bpm
 
     return construct_bsp
@@ -237,7 +240,7 @@ if __name__ == "__main__":
     for key, s in solutions.items():
         new_env, new_facts, plan = s
         print("plan: ", plan)
-        plot_solution(G, Gobs, sim_state, new_env, plan)
+        plot_solution(G, Gobs, sim_state, new_env, new_facts, plan)
         level, horizon = key
         plt.title(f"{goal_str} - Level {level}, Horizon {horizon}")
         plt.show()

@@ -20,6 +20,7 @@ from dsg_exploration_sim.action_and_states import SimulationState
 from pddl_factor_graph.pddl_factors import UninitializedValue, PddlFactor
 from pddl_factor_graph.pddl_factor_graph_solver import resolve_uninitialized_variables
 
+from search_manager import BspManager
 
 import sys
 
@@ -133,7 +134,7 @@ def setup_domain(Gobs, sim_state):
 
     def construct_bsp(goal):
         problem = oml.Problem(pddl_s0, goal)
-        bpm = oml.BspManager(domain, env, problem)
+        bpm = BspManager(domain, env, problem)
         return bpm
 
     return construct_bsp
