@@ -26,15 +26,15 @@ def get_state_from_clingo(facts):
         match f.type:
             case f.type.Function:
                 name = f.name
-                if name != "trueInitialState":
+                if name != "w0":
                     continue
                 var = f.arguments[0]
-                arg0 = var.arguments[0]
-                if arg0.type == f.type.String:
-                    initial_state.append(oml.Fact(arg0.string, []))
+                if var.type == f.type.String:
+                    initial_state.append(oml.Fact(var.string, []))
                     continue
-                predicate = arg0.arguments[0].string
-                args = arg0.arguments[1:]
+                arg0 = var.arguments[0]
+                predicate = arg0.string
+                args = var.arguments[1:]
                 initial_state.append(
                     oml.Fact(
                         predicate, [oml.Symbol(process_clingo_arg(s)) for s in args]
@@ -42,7 +42,6 @@ def get_state_from_clingo(facts):
                 )
             case _:
                 pass
-
     return set(initial_state)
 
 
@@ -283,15 +282,17 @@ class PlanManager:
         self, base_env, og_generated_env, domain: oml.FullDomain
     ):
         next_sol = self.get_next_solution()
-        env, new_facts = extend_env_with_clingo_world(
+        env, new_stream_facts = extend_env_with_clingo_world(
             base_env, og_generated_env, domain, next_sol
         )
-        w0_from_clingo = get_state_from_clingo(next_sol)
+        variable_w0_from_clingo = get_state_from_clingo(next_sol)
         plan = clingo_solution_to_plan(next_sol)
+
+        full_w0 = set(new_stream_facts) | variable_w0_from_clingo
 
         return (
             env,
-            oml.State(w0_from_clingo),
+            oml.State(variable_w0_from_clingo),
             plan,
         )
 

@@ -180,7 +180,6 @@ def generate_initial_state(
     lines += ["\n% (Constant) Initial state"]
     for f in state.facts:
         if f.head not in static_predicates:
-            print(f"{f.head} is not static")
             continue
         lines += generate_initial_state_static(f)
 

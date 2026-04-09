@@ -43,20 +43,14 @@ def plot_generated_connections(
         return any(is_generated(s) for s in f.body)
 
     for f in state.facts:
-        print(f"processing {f}")
         if f.head not in connection_predicates:
-            print("not a connection predicate")
             continue
-        print(env.get_metadata_for_symbol(f.body[0]))
-        print(env.get_metadata_for_symbol(f.body[1]))
         if not has_generated_symbol(f):
-            print("no generated body symbol")
             continue
         assert (
             len(f.body) == 2
         ), f"Not sure how to plot connection fact {f} with more than two symbols"
 
-        print(f"Plotting edge {f}")
         x1, y1 = env.get_metadata_for_symbol(f.body[0])["position"][:2]
         x2, y2 = env.get_metadata_for_symbol(f.body[1])["position"][:2]
         plt.plot([x1, x2], [y1, y2], color=color)

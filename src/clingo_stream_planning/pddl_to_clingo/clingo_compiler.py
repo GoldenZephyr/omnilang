@@ -71,7 +71,7 @@ def add_show_statements(options):
     if options.enable_groups:
         lines.append("#show ingroup/2.")
 
-    # lines.append("#show w0/1.")
+    lines.append("#show w0/1.")
 
     return lines
 
