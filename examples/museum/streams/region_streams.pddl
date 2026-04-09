@@ -25,3 +25,8 @@
     :inputs (?r - region ?f - frontier ?p - place)
     :domain (and (place-in-region ?p ?r) (connected ?p ?f))
     :certified (place-in-region ?f ?r))
+
+(:derived place-in-single-region
+    :inputs (?p - place ?r1 - region ?r2 - region)
+    :domain (and (place-in-region ?p ?r1) (place-in-region ?p ?r2) (!= ?r1 ?r2))
+    :certified false)

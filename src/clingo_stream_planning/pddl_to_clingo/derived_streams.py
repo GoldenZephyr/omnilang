@@ -1,12 +1,16 @@
+# ruff: noqa: F811
 import omnilang as oml
 from omnilang import Fact, NegatedFact
 from clingo_stream_planning.pddl_to_clingo.compiler_utils import (
     variable_to_clingo,
     to_clingo_type_string,
     to_w0_constraint,
+    symbol_to_clingo,
 )
+from plum import dispatch
 
 
+@dispatch
 def generate_derived_certificate(kernel: str, certificate: oml.Fact | oml.NegatedFact):
     # predicate = f'"{certificate.head}"'
     # fact_body = tuple(variable_to_clingo(s) for s in certificate.body)
@@ -30,6 +34,30 @@ def generate_derived_certificate(kernel: str, certificate: oml.Fact | oml.Negate
     return lines
 
 
+@dispatch
+def generate_derived_certificate(kernel: str, certificates):
+    raise TypeError(
+        f"Currently we do not support stream certificates of type {type(certificates)}"
+    )
+
+
+@dispatch
+def generate_derived_certificate(kernel: str, certificates: list):
+    lines = []
+    for cert in certificates:
+        lines += generate_derived_certificate(kernel, cert)
+    return lines
+
+
+@dispatch
+def generate_derived_certificate(kernel: str, certificate: oml.Bool):
+    if certificate.value:
+        raise TypeError(
+            f"Currently streams that certify {certificate.value} are not defined"
+        )
+    return [f":- stream_derived(({kernel}))."]
+
+
 def generate_derived_stream_applicability(stream):
     lines = []
     for p, r in zip(stream.formal_params, stream.restrictions):
@@ -41,10 +69,21 @@ def generate_derived_stream_applicability(stream):
         lines.append(f"inworld({variable_to_clingo(p)})")
 
     for f in stream.domain:
-        if isinstance(f, Fact):
-            lines.append(to_w0_constraint(f))
-        elif isinstance(f, NegatedFact):
-            lines.append(f"not {to_w0_constraint(f)}")
+        match f:
+            case Fact():
+                lines.append(to_w0_constraint(f))
+            case NegatedFact():
+                lines.append(f"not {to_w0_constraint(f)}")
+            case oml.Inequality():
+                lhs = symbol_to_clingo(f.lhs)
+                rhs = symbol_to_clingo(f.rhs)
+                lines.append(f"{lhs} != {rhs}")
+            case oml.Equality():
+                lhs = symbol_to_clingo(f.lhs)
+                rhs = symbol_to_clingo(f.rhs)
+                lines.append(f"{lhs} == {rhs}")
+            case _:
+                raise Exception(f"Currently don't support {type(f)} in stream domain")
     return lines
 
 
@@ -60,8 +99,7 @@ def generate_derived_stream(stream: oml.DerivedStreamFacts):
         f"""stream_derived(({kernel_str})) :- {stream_applicability_constraint}."""
     )
     lines.append(stream_derived)
-    for cert in stream.certificates:
-        lines += generate_derived_certificate(kernel_str, cert)
+    lines += generate_derived_certificate(kernel_str, stream.certificates)
     return lines
 
 

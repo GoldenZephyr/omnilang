@@ -23,6 +23,12 @@ logical_expr: predicate
             | "(" "and" logical_expr+ ")" -> and_expr
             | "(" "not" logical_expr ")" -> negation
             | "()" -> empty
+            | bool
+            | "(" "!=" term term ")" -> inequality_expr
+            | "(" "=" term term ")" -> equality_expr
+
+bool: "true" -> bool_true
+    | "false" -> bool_false
 
 predicate: "(" NAME term* ")"
 

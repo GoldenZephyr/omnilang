@@ -58,4 +58,6 @@ from omnilang.logical_clauses import (
     Implication,
     Bool,
     simplify,
+    Inequality,
+    Equality,
 )

@@ -3,6 +3,7 @@ from importlib.resources import as_file, files
 import omnilang.lark
 from omnilang.streams import Stream, DerivedStreamFacts
 from omnilang.mdp_states import Fact, Symbol, NegatedFact, negate, TypedSymbol
+from omnilang.logical_clauses import Equality, Inequality, Bool
 
 
 class StreamTransformer(Transformer):
@@ -132,6 +133,18 @@ class StreamTransformer(Transformer):
 
     def term(self, items):
         return items[0]
+
+    def bool_true(self, items):
+        return Bool(True)
+
+    def bool_false(self, items):
+        return Bool(False)
+
+    def equality_expr(self, items):
+        return Equality(items[0], items[1])
+
+    def inequality_expr(self, items):
+        return Inequality(items[0], items[1])
 
     # ---------- tokens ----------
 

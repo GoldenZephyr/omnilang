@@ -7,6 +7,18 @@ from plum import dispatch
 
 
 @dataclass
+class Equality:
+    lhs: Formula
+    rhs: Formula
+
+
+@dataclass
+class Inequality:
+    lhs: Formula
+    rhs: Formula
+
+
+@dataclass
 class Bool:
     value: bool
 
@@ -173,6 +185,8 @@ Formula = (
     | Fact
     | NegatedFact
     | Bool
+    | Equality
+    | Inequality
 )
 
 
