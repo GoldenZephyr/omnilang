@@ -1,4 +1,15 @@
 import omnilang as oml
+from dataclasses import dataclass
+
+
+@dataclass
+class ClingoPddlCompilerOptions:
+    enable_streams: bool = True
+    enable_derived_streams: bool = True
+    enable_optimization: bool = True
+    enable_static_optimizations: bool = True
+    enable_groups: bool = False
+    enable_incremental: bool = False
 
 
 def to_lifted_clingo_string(fact: oml.Fact):
@@ -47,6 +58,10 @@ def get_static_predicates(env, domain: oml.FullDomain, state, include_groups=Tru
         for effect in action.positive_effect + action.negative_effect:
             if effect.head in static_predicates:
                 static_predicates.remove(effect.head)
+
+    for dp in domain.pddl_domain.derived_predicates:
+        static_predicates.remove(dp.name)
+
     if include_groups:
         for action in domain.pddl_domain.group_actions:
             for effect in action.positive_effect + action.negative_effect:

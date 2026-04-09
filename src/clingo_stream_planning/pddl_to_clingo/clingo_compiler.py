@@ -17,18 +17,9 @@ from clingo_stream_planning.pddl_to_clingo.pddl_problem import compile_pddl_inst
 from clingo_stream_planning.pddl_to_clingo.derived_predicates import (
     generate_derived_predicates,
 )
-
-from dataclasses import dataclass
-
-
-@dataclass
-class ClingoPddlCompilerOptions:
-    enable_streams: bool = True
-    enable_derived_streams: bool = True
-    enable_optimization: bool = True
-    enable_static_optimizations: bool = False
-    enable_groups: bool = False
-    enable_incremental: bool = False
+from clingo_stream_planning.pddl_to_clingo.compiler_utils import (
+    ClingoPddlCompilerOptions,
+)
 
 
 def compile_domain(
@@ -99,7 +90,7 @@ def compile_problem(
     if options.enable_derived_streams:
         lines += compile_derived_streams(env, domain, problem.initial_state)
 
-    lines += compile_pddl_instance(env, domain, problem)
+    lines += compile_pddl_instance(options, env, domain, problem)
 
     if options.enable_streams:
         lines += compile_stream_instances(env, domain, problem.initial_state)

@@ -3,6 +3,7 @@ from clingo_stream_planning.pddl_to_clingo.compiler_utils import (
     variable_to_clingo,
     to_clingo_type_string,
     get_static_predicates,
+    symbol_to_clingo,
 )
 
 
@@ -123,9 +124,21 @@ def parms_and_types_to_kernel_and_constraints(
 # ("str", P1, P2) is the "kernel"
 # action(("str", P1, P2)) is the nugget
 # action(action(("str", P1, P2))) is the header
+def make_static_constraints(constraints: list[oml.Fact | oml.NegatedFact]):
+    lines = []
+    for c in constraints:
+        kernel = ", ".join(
+            (f'"{c.head}"',) + tuple(symbol_to_clingo(s) for s in c.body)
+        )
+        match c:
+            case oml.Fact():
+                lines.append(f"w0(({kernel}))")
+            case oml.NegatedFact():
+                lines.append(f"not w0(({kernel}))")
+    return lines
 
 
-def generate_action(static_predicates: list, action: oml.LiftedAction):
+def generate_action_declaration(static_predicates: list[str], action: oml.LiftedAction):
     action_kernel, type_strings = parms_and_types_to_kernel_and_constraints(
         action.name, action.params, action.param_restrictions
     )
@@ -133,10 +146,22 @@ def generate_action(static_predicates: list, action: oml.LiftedAction):
     nugget_str = f"action(({kernel_str}))"
     header_str = f"action({nugget_str})"
 
+    constraints = type_strings + make_static_constraints(
+        f for f in action.precondition if f.head in static_predicates
+    )
     # TODO: here is where we want to add more restrictions to pull static facts
     # out from the precondition and into the nugget constraint
-    static_constraints = ", ".join(type_strings)
+    static_constraints = ", ".join(constraints)
     lines = [f"{header_str} :- {static_constraints}."]
+    return lines, nugget_str
+
+
+def generate_action(
+    static_predicates: list[str],
+    action: oml.LiftedAction,
+    static_optimization: bool = True,
+):
+    lines, nugget_str = generate_action_declaration(static_predicates, action)
 
     lines += generate_action_preconditions(static_predicates, nugget_str, action)
     lines += generate_action_postconditions(static_predicates, nugget_str, action)
@@ -154,6 +179,7 @@ def generate_normal_actions(
         static_predicates = get_static_predicates(env, domain, state)
     else:
         static_predicates = set()
+    static_predicates = [p.head for p in static_predicates]
     for action in domain.pddl_domain.actions:
         lines += generate_action(static_predicates, action)
         lines[-1] += "\n"

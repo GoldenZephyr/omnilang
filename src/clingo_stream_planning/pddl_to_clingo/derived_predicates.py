@@ -1,10 +1,30 @@
+from __future__ import annotations
 import omnilang as oml
 from clingo_stream_planning.pddl_to_clingo.compiler_utils import (
     variable_to_clingo,
     symbol_to_clingo,
     to_clingo_type_string,
+    to_w0_constraint,
+    get_static_predicates,
 )
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Callable
+
+
+@dataclass
+class PartialDpGeneration:
+    new_dp_lines: list[str] = field(default_factory=list)
+    precondition_lines: list[str | Callable] = field(default_factory=list)
+    static_preconditions: list[oml.Fact | oml.NegatedFact] = field(default_factory=list)
+    quantified_children: dict = field(default_factory=dict)
+
+    def merge(self, other: PartialDpGeneration):
+        return PartialDpGeneration(
+            self.new_dp_lines + other.new_dp_lines,
+            self.precondition_lines + other.precondition_lines,
+            self.static_preconditions + other.static_preconditions,
+            self.quantified_children | other.quantified_children,
+        )
 
 
 @dataclass
@@ -16,22 +36,33 @@ class DpGenerationContext:
 
 
 def generate_derived_predicates(
-    env: oml.Environment, domain: oml.FullDomain, state: oml.State
+    env: oml.Environment,
+    domain: oml.FullDomain,
+    state: oml.State,
+    enable_static_optimizations: bool = True,
 ):
     """Entrypoint for generating clingo for all derived predicates"""
     derived_predicates = domain.pddl_domain.derived_predicates
     if derived_predicates is None:
         return []
+
+    static_predicates = get_static_predicates(env, domain, state)
+    static_predicates = [f.head for f in static_predicates]
     lines = ["% Derived Predicates"]
     for dp in derived_predicates:
-        aux_dp, original_dp = derived_predicate_to_clingo(dp)
+        aux_dp, original_dp = derived_predicate_to_clingo(static_predicates, dp)
         lines += aux_dp
         lines[-1] += "\n"
         lines += original_dp + ["\n"]
     return lines
 
 
-def derived_predicate_to_clingo(dp: oml.DerivedPredicate, counter=[0], prefix=None):
+def derived_predicate_to_clingo(
+    static_predicates: list[str],
+    dp: oml.DerivedPredicate,
+    counter=[0],
+    prefix=None,
+):
     """Turn a single derived predicate into clingo encoding"""
 
     match dp.body:
@@ -40,39 +71,64 @@ def derived_predicate_to_clingo(dp: oml.DerivedPredicate, counter=[0], prefix=No
         case _:
             trigger_type = "and"
 
-    lines = declare_derived_variable(dp)
-
     param_to_type = {p: t for p, t in zip(dp.params, dp.types)}
     if prefix is None:
         prefix = dp.name
 
     cxt = DpGenerationContext(prefix, trigger_type, param_to_type, counter)
-    new_dp_lines, precondition_lines, quantified_children = dp_formula_to_clingo(
-        cxt, dp.body
+    partial_gen = dp_formula_to_clingo(static_predicates, cxt, dp.body)
+
+    lines = declare_derived_variable(dp, partial_gen.static_preconditions)
+    lines += declare_derived_header(
+        dp,
+        partial_gen.static_preconditions,
+        partial_gen.quantified_children,
+        trigger_type,
     )
-    lines += declare_derived_header(dp, quantified_children, trigger_type)
-    lines += declare_preconditions(dp, precondition_lines, quantified_children)
-    lines += declare_postconditions(dp, trigger_type, quantified_children)
+    lines += declare_preconditions(
+        dp, partial_gen.precondition_lines, partial_gen.quantified_children
+    )
+    lines += declare_postconditions(dp, trigger_type, partial_gen.quantified_children)
 
-    return new_dp_lines, lines
+    return partial_gen.new_dp_lines, lines
 
 
-def declare_derived_variable(dp: oml.DerivedPredicate):
+def facts_to_w0_constraints(static_facts: list):
+    static_constraints = []
+    for c in static_facts:
+        match c:
+            case oml.Fact():
+                static_constraints.append(to_w0_constraint(c))
+            case oml.NegatedFact():
+                static_constraints.append("not" + to_w0_constraint(c))
+            case _:
+                raise Exception(f"Unexpected type: {c}")
+    return static_constraints
+
+
+def declare_derived_variable(dp: oml.DerivedPredicate, static_preconditions: list):
     derived_var, var_input_constraints = build_derived_variable_and_constraints(
         dp.name, dp.params, dp.types
     )
+    relevant_static_preconditions = [
+        p for p in static_preconditions if all(s in dp.params for s in p.body)
+    ]
+    static_constraints = facts_to_w0_constraints(relevant_static_preconditions)
+    constraints = ", ".join([var_input_constraints] + static_constraints)
 
     lines = [""]
     lines += [f"% {str(oml.simplify(dp.body))}"]
-    if len(var_input_constraints) > 0:
-        lines += [f"derivedVariable({derived_var}) :- {var_input_constraints}."]
+    if len(constraints) > 0:
+        lines += [f"derivedVariable({derived_var}) :- {constraints}."]
     else:
         lines += [f"derivedVariable({derived_var})."]
     return lines
 
 
-def declare_derived_header(dp: oml.DerivedPredicate, quantified_children, trigger_type):
-    derived_pred, pred_input_constriants = build_derived_predicate_and_constraints(
+def declare_derived_header(
+    dp: oml.DerivedPredicate, static_preconditions, quantified_children, trigger_type
+):
+    derived_pred, pred_input_constraints = build_derived_predicate_and_constraints(
         dp.name,
         dp.params,
         dp.types,
@@ -80,9 +136,13 @@ def declare_derived_header(dp: oml.DerivedPredicate, quantified_children, trigge
         list(quantified_children.values()),
     )
 
+    static_constraints = facts_to_w0_constraints(static_preconditions)
+
+    constraints = ", ".join([pred_input_constraints] + static_constraints)
+
     header = f"derivedPredicate({derived_pred}, type({trigger_type}))"
-    if len(pred_input_constriants) > 0:
-        return [f"{header} :- {pred_input_constriants}."]
+    if len(pred_input_constraints) > 0:
+        return [f"{header} :- {constraints}."]
     else:
         return [f"{header}."]
 
@@ -168,7 +228,12 @@ def make_dp_precondition(
     return [make_str]
 
 
-def generate_dp_body_atomic(formula: oml.Fact | oml.NegatedFact, trigger_type: str):
+def generate_dp_body_atomic(
+    static_predicates: list[str], formula: oml.Fact | oml.NegatedFact, trigger_type: str
+):
+    if formula.head in static_predicates:
+        return PartialDpGeneration(static_preconditions=[formula])
+
     if isinstance(formula, oml.Fact):
         val = "true"
     elif isinstance(formula, oml.NegatedFact):
@@ -183,32 +248,31 @@ def generate_dp_body_atomic(formula: oml.Fact | oml.NegatedFact, trigger_type: s
     var = f"variable(({kernel}))"
     new_og_lines = make_dp_precondition(trigger_type, var, val)
 
-    return [], new_og_lines, {}
+    return PartialDpGeneration(precondition_lines=new_og_lines)
 
 
 def generate_merged_junction(
+    static_predicates: list[str],
     generation_context: DpGenerationContext,
     formula: oml.Conjunction | oml.Disjunction,
 ):
     """We are merging a conjunction inside a conjunction or a disjunction inside a disjunction"""
-    new_intermediate_lines = []
-    new_og_lines = []
-    quantified_children = {}
+    accumulated_gen = PartialDpGeneration()
     for c in formula.clauses:
         if isinstance(c, oml.Bool):
             continue
-        new_int, new_og, qc = dp_formula_to_clingo(
+        partial_gen = dp_formula_to_clingo(
+            static_predicates,
             generation_context,
             c,
         )
-        new_intermediate_lines += new_int
-        new_og_lines += new_og
-        quantified_children |= qc
+        accumulated_gen = accumulated_gen.merge(partial_gen)
 
-    return new_intermediate_lines, new_og_lines, quantified_children
+    return accumulated_gen
 
 
 def generate_subordinate_junction(
+    static_predicates: list[str],
     generation_context: DpGenerationContext,
     formula: oml.Conjunction | oml.Disjunction,
 ):
@@ -230,16 +294,24 @@ def generate_subordinate_junction(
     derived_var_str = f'variable(("{derived_var}", {parm_str}))'
 
     int_int, og_int = derived_predicate_to_clingo(
-        new_dp, generation_context.counter, generation_context.intermediate_prefix
+        static_predicates,
+        new_dp,
+        generation_context.counter,
+        generation_context.intermediate_prefix,
     )
     new_intermediate_lines = int_int + og_int
     new_og_lines = make_dp_precondition(
         generation_context.trigger_type, derived_var_str, "true"
     )
-    return new_intermediate_lines, new_og_lines, {}
+
+    return PartialDpGeneration(
+        new_dp_lines=new_intermediate_lines,
+        precondition_lines=new_og_lines,
+    )
 
 
 def generate_dp_body_junction(
+    static_predicates: list[str],
     generation_context: DpGenerationContext,
     formula: oml.Conjunction | oml.Disjunction,
 ):
@@ -250,17 +322,20 @@ def generate_dp_body_junction(
         isinstance(formula, oml.Disjunction) and generation_context.trigger_type == "or"
     ):
         return generate_merged_junction(
+            static_predicates,
             generation_context,
             formula,
         )
     else:
         return generate_subordinate_junction(
+            static_predicates,
             generation_context,
             formula,
         )
 
 
 def generate_dp_body_universal(
+    static_predicates: list[str],
     generation_context: DpGenerationContext,
     formula: oml.UniversalQuantifier,
 ):
@@ -292,17 +367,21 @@ def generate_dp_body_universal(
     )
 
     int_int, og_int = derived_predicate_to_clingo(
-        new_dp, counter, generation_context.intermediate_prefix
+        static_predicates, new_dp, counter, generation_context.intermediate_prefix
     )
     new_intermediate_lines = int_int + og_int
 
     new_og_lines = make_dp_precondition(
         generation_context.trigger_type, derived_var_str, "false"
     )
-    return new_intermediate_lines, new_og_lines, {}
+    return PartialDpGeneration(
+        new_dp_lines=new_intermediate_lines,
+        precondition_lines=new_og_lines,
+    )
 
 
 def generate_dp_body_existential(
+    static_predicates: list[str],
     cxt: DpGenerationContext,
     formula: oml.ExistentialQuantifier,
 ):
@@ -328,7 +407,7 @@ def generate_dp_body_existential(
     new_dp = oml.DerivedPredicate(derived_var, params, types, new_formula)
 
     int_int, og_int = derived_predicate_to_clingo(
-        new_dp, cxt.counter, cxt.intermediate_prefix
+        static_predicates, new_dp, cxt.counter, cxt.intermediate_prefix
     )
     new_intermediate_lines = int_int + og_int
 
@@ -339,25 +418,34 @@ def generate_dp_body_existential(
     )
 
     quantified_vars = {p: t for p, t in zip(formula.formal_params, formula.param_types)}
-    return new_intermediate_lines, new_og_lines, quantified_vars
+    return PartialDpGeneration(
+        new_dp_lines=new_intermediate_lines,
+        precondition_lines=new_og_lines,
+        quantified_children=quantified_vars,
+    )
 
 
 def generate_dp_body_negation(
+    static_predicates: list[str],
     cxt: DpGenerationContext,
     formula: oml.ExistentialQuantifier,
 ):
     match formula.clause:
         case oml.Fact() | oml.NegatedFact():
             # If the body is a fact, then generate precondition for negated fact.
-            x, new_og_lines, y = dp_formula_to_clingo(
+            partial_gen = dp_formula_to_clingo(
+                static_predicates,
                 cxt,
                 oml.negate(formula.clause),
             )
             assert (
-                x == []
+                partial_gen.new_dp_lines == []
             )  # shouldn't be any new derived predicates because we know it's a Fact
-            assert y == {}  # shouldn't be any new quantified variables
-            return [], new_og_lines, {}
+            assert (
+                partial_gen.quantified_children == {}
+            )  # shouldn't be any new quantified variables
+            return partial_gen
+
         case _:
             # Otherwise, negate the output of an intermediate stream.
             params = formula.get_params_matching(
@@ -378,7 +466,7 @@ def generate_dp_body_negation(
             new_dp = oml.DerivedPredicate(derived_var, params, types, formula.clause)
 
             int_int, og_int = derived_predicate_to_clingo(
-                new_dp, cxt.counter, cxt.intermediate_prefix
+                static_predicates, new_dp, cxt.counter, cxt.intermediate_prefix
             )
             new_intermediate_lines = int_int + og_int
 
@@ -390,39 +478,46 @@ def generate_dp_body_negation(
 
 
 def dp_formula_to_clingo(
+    static_predicates: list[str],
     generation_context: DpGenerationContext,
     formula,
 ):
     formula = oml.simplify(formula)
     match formula:
         case oml.Fact() | oml.NegatedFact():
-            return generate_dp_body_atomic(formula, generation_context.trigger_type)
+            return generate_dp_body_atomic(
+                static_predicates, formula, generation_context.trigger_type
+            )
 
         case oml.Conjunction() | oml.Disjunction():
             return generate_dp_body_junction(
+                static_predicates,
                 generation_context,
                 formula,
             )
         case oml.UniversalQuantifier():
             return generate_dp_body_universal(
+                static_predicates,
                 generation_context,
                 formula,
             )
 
         case oml.ExistentialQuantifier():
             return generate_dp_body_existential(
+                static_predicates,
                 generation_context,
                 formula,
             )
 
         case oml.Negation():
             return generate_dp_body_negation(
+                static_predicates,
                 generation_context,
                 formula,
             )
 
         case oml.Bool():
-            return [], [], {}
+            return PartialDpGeneration()
 
         case _:
             raise Exception(

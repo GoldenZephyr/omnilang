@@ -2,6 +2,7 @@ import omnilang as oml
 from clingo_stream_planning.pddl_to_clingo.compiler_utils import (
     get_static_predicates,
     symbol_to_clingo,
+    ClingoPddlCompilerOptions,
 )
 from clingo_stream_planning.pddl_to_clingo.derived_predicates import (
     derived_predicate_to_clingo,
@@ -10,16 +11,17 @@ from clingo_stream_planning.pddl_to_clingo.derived_predicates import (
 
 
 def compile_pddl_instance(
+    opts: ClingoPddlCompilerOptions,
     env: oml.Environment,
     domain: oml.PddlDomain,
     problem: oml.Problem,
 ):
     lines = ["%% PDDL Instance"]
     lines += generate_primitive_constants(env, domain, problem.initial_state)
+    # lines += ["\n"]
+    # lines += generate_compound_constants(env, domain, problem.initial_state)
     lines += ["\n"]
-    lines += generate_compound_constants(env, domain, problem.initial_state)
-    lines += ["\n"]
-    lines += generate_initial_state_variables(env, domain, problem.initial_state)
+    lines += generate_initialization(opts, env, domain, problem.initial_state)
     lines += ["\n"]
     lines += generate_goal(env, domain, problem.goal)
     lines += ["\n"]
@@ -97,18 +99,18 @@ def generate_compound_constant(f: oml.Fact):
     return lines
 
 
-def generate_compound_constants(
-    env: oml.Environment, domain: oml.FullDomain, state: oml.State
-):
-    lines = ["% (Constant) Initial state"]
-    static_predicates = get_static_predicates(env, domain, state)
-    for f in state.facts:
-        if f.head not in static_predicates:
-            continue
-        lines += generate_compound_constant(f)
-    return lines
-
-    return lines
+# def generate_compound_constants(
+#    env: oml.Environment, domain: oml.FullDomain, state: oml.State
+# ):
+#    lines = ["% (Constant) Initial state"]
+#    static_predicates = get_static_predicates(env, domain, state)
+#    for f in state.facts:
+#        if f.head not in static_predicates:
+#            continue
+#        lines += generate_compound_constant(f)
+#    return lines
+#
+#    return lines
 
 
 def generate_initial_state_variable(f: oml.Fact):
@@ -122,15 +124,23 @@ def generate_initial_state_variable(f: oml.Fact):
     return lines
 
 
-def generate_initial_state_variables(
-    env: oml.Environment, domain: oml.FullDomain, state: oml.State
+def generate_initial_state_static(f: oml.Fact):
+    kernel = (f'"{f.head}"',)
+    for s in f.body:
+        kernel += (f'constant("{s.identifier}")',)
+    kernel_str = ",".join(kernel)
+    lines = [f"w0(({kernel_str}))."]
+    return lines
+
+
+def generate_initialization(
+    opts: ClingoPddlCompilerOptions,
+    env: oml.Environment,
+    domain: oml.FullDomain,
+    state: oml.State,
 ):
-    lines = ["% (Variable) Initial state"]
-    static_predicates = get_static_predicates(env, domain, state)
-    for f in state.facts:
-        if f.head in static_predicates:
-            continue
-        lines += generate_initial_state_variable(f)
+    lines = generate_initial_state(env, domain, state, opts.enable_static_optimizations)
+
     lines += ["\n"]
     lines.append(
         "initialState(X, value(X, false)) :- variable(X), not initialState(X, value(X, true))."
@@ -144,4 +154,34 @@ def generate_initial_state_variables(
     lines += [
         "initialState(variable(Kernel), value(variable(Kernel), false)) :- variable(variable(Kernel)), -w0(Kernel)."
     ]
+
+    return lines
+
+
+def generate_initial_state(
+    env: oml.Environment,
+    domain: oml.FullDomain,
+    state: oml.State,
+    enable_static_optimizations: bool,
+):
+    if enable_static_optimizations:
+        static_predicates = get_static_predicates(env, domain, state)
+    else:
+        static_predicates = set()
+    static_predicates = [p.head for p in static_predicates]
+    print("static predicates: ", static_predicates)
+
+    lines = ["% (Variable) Initial state"]
+    for f in state.facts:
+        if f.head in static_predicates:
+            continue
+        lines += generate_initial_state_variable(f)
+
+    lines += ["\n% (Constant) Initial state"]
+    for f in state.facts:
+        if f.head not in static_predicates:
+            print(f"{f.head} is not static")
+            continue
+        lines += generate_initial_state_static(f)
+
     return lines
