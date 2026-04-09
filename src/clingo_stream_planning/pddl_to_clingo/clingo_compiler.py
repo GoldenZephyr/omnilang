@@ -68,6 +68,7 @@ def add_show_statements(options):
         lines.append("#show generated_by/2.")
         lines.append("#show inworld/1.")
         lines.append("#show stream_generated/1.")
+        lines.append("#show stream_derived/1.")
     if options.enable_groups:
         lines.append("#show ingroup/2.")
 

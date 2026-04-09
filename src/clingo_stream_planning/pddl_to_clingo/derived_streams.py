@@ -21,9 +21,9 @@ def generate_derived_certificate(kernel: str, certificate: oml.Fact | oml.Negate
     fact_str = to_w0_constraint(certificate)
     match certificate:
         case oml.Fact():
-            static_fact = f"{fact_str} :- stream_derived({kernel})."
+            static_fact = f"{fact_str} :- stream_derived(({kernel}))."
         case oml.NegatedFact():
-            static_fact = f"-{fact_str} :- stream_derived({kernel})."
+            static_fact = f"-{fact_str} :- stream_derived(({kernel}))."
         case _:
             raise Exception(f"Unknown thing being certified: {certificate}")
     lines = [static_fact]
@@ -57,7 +57,7 @@ def generate_derived_stream(stream: oml.DerivedStreamFacts):
     formal_args = tuple(variable_to_clingo(s) for s in stream.formal_params)
     kernel_str = ", ".join((f'"{stream.name}"',) + formal_args)
     stream_derived = (
-        f"""stream_derived({kernel_str}) :- {stream_applicability_constraint}."""
+        f"""stream_derived(({kernel_str})) :- {stream_applicability_constraint}."""
     )
     lines.append(stream_derived)
     for cert in stream.certificates:
