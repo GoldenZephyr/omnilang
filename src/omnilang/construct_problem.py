@@ -26,7 +26,7 @@ from omnilang.rules import apply_rules
 from dataclasses import dataclass
 import math
 import logging
-from typing import Optional
+from typing import Optional, Callable
 from dsg_exploration_sim.action_and_states import SimulationState
 
 logger = logging.getLogger(__name__)
@@ -38,10 +38,12 @@ class FullDomain:
         pddl_domain: PddlDomain,
         streams: list[Stream],
         derived_stream_facts: Optional[list[DerivedStreamFacts]] = None,
+        instance_constructor: Optional[Callable] = None,
     ):
         self.pddl_domain = pddl_domain
         self.streams = streams
         self.derived_stream_facts = derived_stream_facts
+        self.instance_constructor = instance_constructor
 
     def lookup_stream(self, stream_name):
         for s in self.streams:

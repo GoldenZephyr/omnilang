@@ -20,3 +20,7 @@ class PddlFactor:
         sig = inspect.signature(self.function)
         formal_param_names = sig.parameters.keys()
         return formal_param_names
+
+
+def near_factor(s: dict, t: dict, expected_distance=1):
+    return expected_distance - np.linalg.norm(s["position"] - t["position"])
