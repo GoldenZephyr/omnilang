@@ -1,7 +1,11 @@
 import numpy as np
 import spark_dsg
 
-from omnilang.testing_scene_graphs.utils import initialize_new_dsg, id_from_label
+from omnilang.testing_scene_graphs.utils import (
+    initialize_new_dsg,
+    id_from_label,
+    id_from_room_label,
+)
 
 
 def add_object_to_place(
@@ -22,6 +26,14 @@ def add_object_to_place(
     object_ns = spark_dsg.NodeSymbol("o", object_idx)
     G.add_node(spark_dsg.DsgLayers.OBJECTS, object_ns.value, obj)
     G.insert_edge(place, object_ns)
+
+
+def label_region(G, region_label, ns_str):
+    ns = spark_dsg.NodeSymbol(ns_str[0], int(ns_str[1:]))
+    r = G.find_node(ns)
+    if r is None:
+        raise Exception(f"Couldn't find {ns} in scene graph!")
+    r.attributes.semantic_label = id_from_room_label(region_label)
 
 
 def build_NxN_dsg(rows, cols):

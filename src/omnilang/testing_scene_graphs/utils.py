@@ -54,6 +54,9 @@ labelspaces = {
             [48, "thing"],
             [49, "animal"],
             [50, "human"],
+            [51, "cone"],
+            [52, "mallet"],
+            [53, "purse"],
         ],
         "_l4p0": [
             [0, "unknown"],
@@ -70,9 +73,19 @@ labelspaces = {
             [11, "dock"],
             [12, "parking"],
             [13, "footing"],
+            [14, "intersection"],
         ],
     }
 }
+
+
+def id_from_room_label(label: str):
+    for idx, lbl in labelspaces["labelspaces"]["_l4p0"]:
+        if lbl == label:
+            return idx
+    raise Exception(
+        f"Label {label} not found in labelspace. Options are: {[lbl for _, lbl in labelspaces['labelspaces']['_l4p0']]}"
+    )
 
 
 def id_from_label(label: str):

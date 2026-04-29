@@ -7,13 +7,16 @@ from pddl_factor_graph.pddl_factors import PddlFactor
 from pddl_factor_graph.pddl_factor_graph_solver import resolve_uninitialized_variables
 
 from region_grid_world import setup_dsg, setup_domain, near_factor, plot_solution
-from dsg_exploration_sim.westpoint_pddl_bridge import sim_transformer_wp
+from dsg_exploration_sim.westpoint_pddl_bridge_sim import sim_transformer_wp
 from dsg_exploration_sim.simulator import (
     add_frontiers,
     compute_updated_dsg,
     apply_update,
 )
-
+from dsg_exploration_sim.refinement import refine_plan
+from dsg_exploration_sim.utils import get_primitive_sequence
+from dsg_exploration_sim.westpoint_pddl_bridge import spot_transformer_wp
+import time
 
 import sys
 

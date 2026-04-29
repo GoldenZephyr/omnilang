@@ -107,7 +107,7 @@ def plot_rectangle(anchor, width, height, ax=None, rect_color="g", rect_linewidt
     ax.add_patch(rect)
 
 
-def plot_rooms(G, edge_color, alpha):
+def plot_rooms(G, edge_color, alpha=1, edge_lw=3):
     for room_node in G.get_layer(spark_dsg.DsgLayers.ROOMS).nodes:
         child_positions = np.array(
             [G.get_node(c).attributes.position for c in room_node.children()]
@@ -119,13 +119,23 @@ def plot_rooms(G, edge_color, alpha):
         maxes = np.max(child_positions, axis=0)
         width = maxes[0] - mins[0]
         height = maxes[1] - mins[1]
-        plot_rectangle(mins - 0.1, width + 0.2, height + 0.2, rect_color=edge_color)
+        plot_rectangle(
+            mins - 0.1,
+            width + 0.2,
+            height + 0.2,
+            rect_color=edge_color,
+            rect_linewidth=edge_lw,
+        )
 
 
-def plot_dsg(G: spark_dsg.DynamicSceneGraph, alpha=1):
+def plot_dsg(
+    G: spark_dsg.DynamicSceneGraph,
+    alpha=1,
+    trav_layer_name=spark_dsg.DsgLayers.TRAVERSABILITY,
+):
     label_to_line = {}
     labels = plot_layer(
-        G.get_layer(spark_dsg.DsgLayers.TRAVERSABILITY),
+        G.get_layer(trav_layer_name),
         alpha=alpha,
         text_offset=0.01,
     )
@@ -155,13 +165,14 @@ def plot_dsg(G: spark_dsg.DynamicSceneGraph, alpha=1):
     labels = plot_layer(
         G.get_layer(spark_dsg.DsgLayers.ROOMS),
         alpha=alpha,
-        edge_color="g",
+        edge_color="k",
         node_color="g",
+        edge_lw=2,
         text_offset=0.1,
     )
     label_to_line |= labels
 
-    plot_rooms(G, edge_color="g", alpha=alpha)
+    plot_rooms(G, edge_color="g", edge_lw=3, alpha=alpha)
     return label_to_line
 
 

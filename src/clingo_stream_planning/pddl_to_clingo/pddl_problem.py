@@ -23,7 +23,7 @@ def compile_pddl_instance(
     lines += ["\n"]
     lines += generate_initialization(opts, env, domain, problem.initial_state)
     lines += ["\n"]
-    lines += generate_goal(env, domain, problem.goal)
+    lines += generate_goal(env, domain, problem.initial_state, problem.goal)
     lines += ["\n"]
     return lines
 
@@ -41,7 +41,7 @@ def fact_to_kernel(fact: oml.Fact | oml.NegatedFact):
     )
 
 
-def generate_goal(env: oml.Environment, domain: oml.FullDomain, goal):
+def generate_goal(env: oml.Environment, domain: oml.FullDomain, state: oml.State, goal):
     lines = ["% goal"]
     if isinstance(goal, oml.Fact):
         kernel = fact_to_kernel(goal)
@@ -53,6 +53,9 @@ def generate_goal(env: oml.Environment, domain: oml.FullDomain, goal):
         val = "false"
     else:
         print(goal)
+        static_predicates = get_static_predicates(
+            env, domain, state, include_groups=True
+        )
         assert isinstance(goal, oml.Formula)
         val = "true"
         quantified_vars = goal.get_quantified_variables()
@@ -64,7 +67,7 @@ def generate_goal(env: oml.Environment, domain: oml.FullDomain, goal):
         types = [env.get_object_type(s) for s in params]
         dp = oml.DerivedPredicate("goal-dp", params, types, goal)
 
-        aux_dp, original_dp = derived_predicate_to_clingo(dp)
+        aux_dp, original_dp = derived_predicate_to_clingo(static_predicates, dp)
         lines += aux_dp + original_dp
         dp_kernel = (
             "goal-dp"  # Goal derived predicate can't have any top-level free variables

@@ -84,15 +84,19 @@ def load_full_domain(
 
 
 def augment_planning_representation(
-    G, current_state: SimulationState, planning_rep: State
+    G, current_state: SimulationState, planning_rep: State, all_places_observed=True
 ):
     for vn in current_state.visited_nodes:
         sym = spark_dsg.NodeSymbol(vn).str()
         planning_rep.facts.add(Fact("visited", [Symbol(sym)]))
 
-    if True:
+    if all_places_observed:
         for n in G.base_dsg.get_layer(spark_dsg.DsgLayers.TRAVERSABILITY).nodes:
             sym = n.id.str()
+            planning_rep.facts.add(Fact("observed", [Symbol(sym)]))
+    else:
+        for vn in current_state.visited_nodes:
+            sym = spark_dsg.NodeSymbol(vn).str()
             planning_rep.facts.add(Fact("observed", [Symbol(sym)]))
 
     if len(current_state.held_objects) == 0:
@@ -172,12 +176,20 @@ def traversability_to_pddl(G: spark_dsg.SceneGraph):
     return symbol_to_type, facts
 
 
-def regions_to_pddl(G: spark_dsg.SceneGraph):
+def regions_to_pddl(G: spark_dsg.SceneGraph, special_room_categories=[]):
     symbol_to_type = {}
     facts = set()
     for n in G.get_layer(spark_dsg.DsgLayers.ROOMS).nodes:
+        node_layer = n.layer.layer
+        node_partition = n.layer.partition
+        category = G.get_labelspace(node_layer, node_partition).get_node_category(n)
+        if category in special_room_categories:
+            t = category
+        else:
+            t = "region"
+
         regions_symbol = Symbol(n.id.str().lower())
-        symbol_to_type[regions_symbol] = "region"
+        symbol_to_type[regions_symbol] = t
 
     trav_layer_key = G.get_layer_key(spark_dsg.DsgLayers.TRAVERSABILITY)
     region_layer_key = G.get_layer_key(spark_dsg.DsgLayers.ROOMS)
@@ -222,12 +234,13 @@ def dsg_to_region_problem(
     G,
     initial_place,
     special_object_categories=["food"],
+    special_room_categories=["parking", "intersection"],
 ):
     pddl_generators = [
         places_to_pddl,
         traversability_to_pddl,
         lambda g: objects_to_pddl(g, special_object_categories, True),
-        regions_to_pddl,
+        lambda g: regions_to_pddl(g, special_room_categories),
     ]
     symbol_to_type, facts = types_and_facts_from_generators(G, pddl_generators)
 

@@ -357,7 +357,10 @@ def generate_dp_body_universal(
 
     param_to_type = generation_context.param_to_type
     parm_str = ", ".join(variable_to_clingo(p) for p in param_to_type)
-    derived_var_str = f'variable(("{derived_var}", {parm_str}))'
+    if len(parm_str) > 0:
+        derived_var_str = f'variable(("{derived_var}", {parm_str}))'
+    else:
+        derived_var_str = f'variable(("{derived_var}"))'
 
     new_dp = oml.DerivedPredicate(
         derived_var,
@@ -392,10 +395,11 @@ def generate_dp_body_existential(
     params = list(set(params))
     for p, t in zip(formula.formal_params, formula.param_types):
         cxt.param_to_type[p] = t
+
     # NOTE: this param logic probably isn't quite right for more deeply nested clauses
     # Specifically, we want to skip lifted params that are introduced by descendant quantified expressions.
-
-    types = [cxt.param_to_type[p] for p in params]
+    types = [cxt.param_to_type[p] for p in params if p in cxt.param_to_type]
+    params = [p for p in params if p in cxt.param_to_type]
 
     idx = cxt.counter[0]
     cxt.counter[0] += 1
@@ -452,8 +456,10 @@ def generate_dp_body_negation(
                 lambda x: isinstance(x, oml.Symbol)
                 and (x.identifier.startswith("?") or x.identifier.startswith("&"))
             )
-            params = list(set(params))
-            types = [cxt.param_to_type[p] for p in params]
+            # params = list(set(params))
+            # types = [cxt.param_to_type[p] for p in params]
+            types = [cxt.param_to_type[p] for p in params if p in cxt.param_to_type]
+            params = [p for p in params if p in cxt.param_to_type]
 
             idx = cxt.counter[0]
             cxt.counter[0] += 1
@@ -474,7 +480,10 @@ def generate_dp_body_negation(
                 cxt.trigger_type, derived_var_str, "false"
             )
 
-            return new_intermediate_lines, new_og_lines
+            # return new_intermediate_lines, new_og_lines
+            return PartialDpGeneration(
+                new_dp_lines=new_intermediate_lines, precondition_lines=new_og_lines
+            )
 
 
 def dp_formula_to_clingo(

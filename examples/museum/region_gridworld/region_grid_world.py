@@ -3,6 +3,7 @@ import numpy as np
 from omnilang.testing_scene_graphs import (
     build_NxN_dsg,
     add_object_to_place,  # noqa
+    label_region,
     layer_to_name,
     plot_generated_env,
     plot_dsg,
@@ -40,8 +41,9 @@ def get_env_and_state(Gobs, sim_state, domain):
 
 
 def plot_solution(G, Gobs, sim_state, new_env, new_facts, plan):
-    labels_for_legend = plot_dsg(G, 0.4)
-    labels_for_legend = layer_to_name(G, labels_for_legend, new_prefix="gt-")
+    labels_for_legend = {}
+    # labels_for_legend |= plot_dsg(G, 0.4)
+    # labels_for_legend = layer_to_name(G, labels_for_legend, new_prefix="gt-")
 
     obs_labels = plot_dsg(Gobs)
     obs_labels = layer_to_name(Gobs, obs_labels)
@@ -64,8 +66,12 @@ def setup_dsg():
     G = build_NxN_dsg(9, 9)
     add_grid_regions(G, -0.5, 3)
 
+    label_region(G, "parking", "r6")
+    label_region(G, "parking", "r7")
+    label_region(G, "intersection", "r1")
+
     # add_object_to_place(G, "box", 1, spark_dsg.NodeSymbol("t", 8))
-    # add_object_to_place(G, "box", 2, spark_dsg.NodeSymbol("t", 1))
+    add_object_to_place(G, "cone", 1, spark_dsg.NodeSymbol("t", 55))  # cone in r6
 
     # Partial Exploration
     observed_place_idx = [0, 1, 2, 3, 9, 10, 11, 12, 18, 19, 20, 21, 27, 28, 29, 30]
@@ -119,15 +125,18 @@ def placeholder_position_generator(node):
 def setup_domain(Gobs, sim_state):
     stream_path = [
         "../streams/place_beyond_frontier.pddl",
-        "../streams/simple_place_generates_food.pddl",
+        # "../streams/simple_place_generates_food.pddl",
         "../streams/region_streams.pddl",
+        "../streams/smart_pick_streams.pddl",
+        "../streams/cone_stream.pddl",
     ]
-    pddl_path = "../domains/westpoint_domain.pddl"
+    pddl_path = "../domains/grid_region_domain.pddl"
 
     stream_functions = {}
     stream_functions["frontier-generates-place"] = placeholder_position_generator
     stream_functions["region-generates-place"] = placeholder_position_generator
-    stream_functions["unobserved-place-generates-food"] = placeholder_position_generator
+    # stream_functions["unobserved-place-generates-food"] = placeholder_position_generator
+    stream_functions["generate-possible-object"] = placeholder_position_generator
     domain = oml.load_full_domain(pddl_path, stream_path, stream_functions)
 
     env, pddl_s0 = get_env_and_state(Gobs, sim_state, domain)
@@ -152,6 +161,7 @@ if __name__ == "__main__":
     valid_goals = [
         "goto-region",
         "search-region",
+        "get-cone",
     ]
     if len(sys.argv) < 2:
         print("Usage: python gridworld.py <example name>")
@@ -160,7 +170,7 @@ if __name__ == "__main__":
 
     match goaltype:
         case "goto-region":
-            target_region = "r6"
+            target_region = "r8"
             # goal = oml.PartialState(
             #    {oml.Fact("in-region", [oml.Symbol(target_region)])}, set()
             # )
@@ -183,6 +193,47 @@ if __name__ == "__main__":
             goal = oml.Fact("searched-region", [oml.Symbol(target_region)])
             goal_str = f"Search {target_region}"
             domain_constructor = setup_domain
+        case "get-cone":
+            goal = oml.ExistentialQuantifier(
+                [oml.Symbol("?c")],
+                ["cone"],
+                # oml.Fact("holding", [oml.Symbol("?c")]),
+                oml.Fact("obj-at", [oml.Symbol("?c"), oml.Symbol("t0")]),
+            )
+
+            goal_str = "Grab Cone"
+            domain_constructor = setup_domain
+        case "block-intersections":
+            goal = oml.UniversalQuantifier(
+                [oml.Symbol("?r")],
+                ["intersection"],
+                oml.ExistentialQuantifier(
+                    [oml.Symbol("?c")],
+                    ["cone"],
+                    oml.Fact("object-in-region", [oml.Symbol("?c"), oml.Symbol("?r")]),
+                ),
+            )
+
+            # goal = oml.ExistentialQuantifier(
+            #     [oml.Symbol("?c")],
+            #     ["cone"],
+            #     oml.Fact("object-in-region", [oml.Symbol("?c"), oml.Symbol("r1")]),
+            # )
+
+            # goal = oml.Conjunction(
+            #     [
+            #         oml.ExistentialQuantifier(
+            #             [oml.Symbol("?c")],
+            #             ["cone"],
+            #             oml.Fact("holding", [oml.Symbol("?c")]),
+            #         ),
+            #         oml.Fact("in-region", [oml.Symbol("r1")]),
+            #     ],
+            # )
+
+            goal_str = "Block all intersections"
+            domain_constructor = setup_domain
+
         case _:
             print(f"Please use a goal in {valid_goals}")
             exit(1)
@@ -194,7 +245,7 @@ if __name__ == "__main__":
 
     bpm = domain_constructor(Gobs, sim_state)(goal)
 
-    solutions = bpm.search((2, 6), (4, 9), take_first_plan=True)
+    solutions = bpm.search((2, 6), (4, 12), take_first_plan=True)
     # solutions = bpm.search((0, 6), (1, 20))
     # new_env, new_facts, plan = bpm.search_at_level(1, 4)
 
