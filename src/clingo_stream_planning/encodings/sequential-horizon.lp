@@ -24,6 +24,7 @@ holds(Variable, Value, 0) :- initialState(Variable, Value).
 % all-elements-true => G
 % all-elements-false => not G
 % otherwise => no value
+% TODO: Make sure that these group predicates are not subject to inertia, and make sure that they don't have the same "default false" logic that predicates have.
 holds(variable((P, G)), value(variable((P, G)), true), T) :-
     group(G),
     groupable_predicate(P),

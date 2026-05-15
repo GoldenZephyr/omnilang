@@ -169,6 +169,7 @@ def make_general_stream_constraints():
 
     inworld_tracking = "inworld(X) :- generated_by(X, _)."
     inworld_default = 'inworld(X) :- not fromstream(X), has(X, type("object")).'
+    group_inworld = "inworld(X) :- group(X)."
     inworld_is_caused = ":- inworld(O), fromstream(O), not generated(O)."
 
     clingo_lines = [
@@ -176,6 +177,7 @@ def make_general_stream_constraints():
         stream_consistency,
         inworld_tracking,
         inworld_default,
+        group_inworld,
         inworld_is_caused,
     ]
     return clingo_lines

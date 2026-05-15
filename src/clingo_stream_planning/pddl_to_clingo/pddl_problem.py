@@ -89,7 +89,13 @@ def generate_primitive_constants(
         if type is None:
             type = "object"
         lines.append(f'constant(constant("{symbol.identifier}")).')
-        lines.append(f'has(constant("{symbol.identifier}"), type("{type}")).')
+        if type == "group":
+            m = env.get_metadata_for_symbol(symbol)
+            gt = m["group_type"]
+            lines.append(f'has(constant("{symbol.identifier}"), grouptype("{gt}")).')
+            lines.append(f'group(constant("{symbol.identifier}")).')
+        else:
+            lines.append(f'has(constant("{symbol.identifier}"), type("{type}")).')
     return lines
 
 

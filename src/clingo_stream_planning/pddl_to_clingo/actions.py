@@ -2,6 +2,7 @@ import omnilang as oml
 from clingo_stream_planning.pddl_to_clingo.compiler_utils import (
     variable_to_clingo,
     to_clingo_type_string,
+    to_clingo_group_type_string,
     get_static_predicates,
     symbol_to_clingo,
 )
@@ -93,6 +94,7 @@ def parms_and_types_to_kernel_and_constraints(
     params: list[oml.Symbol],
     param_types: list,
     include_inworld_constraints: bool = True,
+    handle_groups: bool = True,
 ):
     kernel = (f'"{name}"',)
     for p in params:
@@ -113,8 +115,15 @@ def parms_and_types_to_kernel_and_constraints(
 
     type_strings = []
     for p, t in zip(params, types):
+        isgroup = p.identifier.startswith("&")
+        if not handle_groups:
+            raise Exception(f"I was told not to deal with groups but {p} is a group")
+
         var = variable_to_clingo(p)
-        type_strings.append(to_clingo_type_string(var, t))
+        if isgroup:
+            type_strings.append(to_clingo_group_type_string(var, t))
+        else:
+            type_strings.append(to_clingo_type_string(var, t))
         if include_inworld_constraints:
             type_strings.append(f"inworld({var})")
 
@@ -187,9 +196,87 @@ def generate_normal_actions(
 
 
 def generate_group_actions(
-    env: oml.Environment, domain: oml.FullDomain, state: oml.State
+    env: oml.Environment,
+    domain: oml.FullDomain,
+    state: oml.State,
+    enable_static_predicates=True,
 ):
     lines = ["% group actions"]
+    if enable_static_predicates:
+        static_predicates = get_static_predicates(env, domain, state)
+    else:
+        static_predicates = set()
+    static_predicates = [p.head for p in static_predicates]
+
+    lines += ["ingroup(G, L) :- group_chosen(G, (P, X1), 1), w0((P, L, X1))."]
+    lines += ["ingroup(G, L) :- group_chosen(G, (P, X1), 2), w0((P, X1, L))."]
+    lines += ['w0(("member", L, G)) :- ingroup(G, L).']
+    lines += [
+        '{group_chosen(G, ("place-in-region", R), 1)} :- w0(("group", G)), w0(("place-in-region", _, R)).'
+    ]
+    lines += [
+        ':- w0(("group", G)), ingroup(G, L), has(G, grouptype(T)), not has(L, type(T)).'
+    ]
+
+    # TODO: move
+    lines += ['groupable_predicate("observed").']
+    lines += ['groupable_predicate("visited").']
     for action in domain.pddl_domain.group_actions:
-        lines += generate_group_action(action)
+        lines += generate_group_action(static_predicates, action)
     return lines
+
+
+def generate_group_action(
+    static_predicates: list[str],
+    action: oml.LiftedAction,
+):
+    lines, nugget_str = generate_group_action_declaration(static_predicates, action)
+
+    lines += generate_action_preconditions(static_predicates, nugget_str, action)
+    lines += generate_action_postconditions(static_predicates, nugget_str, action)
+    return lines
+
+
+def generate_group_action_declaration(
+    static_predicates: list[str], action: oml.LiftedAction
+):
+    action_kernel, type_strings = parms_and_types_to_kernel_and_constraints(
+        action.name, action.params, action.param_restrictions, handle_groups=True
+    )
+    for p in action.params:
+        if p.identifier.startswith("&"):
+            type_strings.append(f"group({variable_to_clingo(p)})")
+
+    kernel_str = ", ".join(action_kernel)
+    nugget_str = f"action(({kernel_str}))"
+    header_str = f"action({nugget_str})"
+
+    constraints = type_strings + make_static_constraints(
+        f for f in action.precondition if f.head in static_predicates
+    )
+    # TODO: here is where we want to add more restrictions to pull static facts
+    # out from the precondition and into the nugget constraint
+    static_constraints = ", ".join(constraints)
+    lines = [f"{header_str} :- {static_constraints}."]
+    return lines, nugget_str
+
+
+# Proposal for better way of associating objects to groups.
+# Identifying the groups by collections of predicates
+# makes remapping after world updates much more sane.
+
+# p1.
+# p2.
+# r1.
+# r2.
+# g1.
+# group(g1).
+#
+# w0(("place-in-region", p1, r1)).
+# w0(("place-in-region", p2, r1)).
+# w0(("place-in-region", p3, r2)).
+#
+# ingroup(G, L) :- group_chosen(G, (P, X1), 1), w0((P, L, X1)).
+# ingroup(G, L) :- group_chosen(G, (P, X1), 2), w0((P, X1, L)).
+#
+# group_chosen(g1, ("place-in-region", r1), 1).

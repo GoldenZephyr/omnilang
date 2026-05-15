@@ -14,7 +14,7 @@ def get_output_types(streams: list[oml.Stream]):
 
 def add_groups(env0, s0, groups: dict[str, str]):
     symbols = [oml.Symbol(k) for k in groups]
-    dummy_types = {k: "object" for k in groups}
+    dummy_types = {k: "group" for k in groups}
 
     env = oml.Environment(env0, symbols, dummy_types)
     for groupname, grouptype in groups.items():
@@ -31,6 +31,7 @@ class BspManager:
         env: oml.Environment,
         problem: oml.Problem,
         enable_groups=True,
+        n_models=10,
     ):
         self.domain = domain
         self.env = env
@@ -40,7 +41,7 @@ class BspManager:
         self.solutions = {}
 
         # Number of models to generate per (belief-level, horizon) pair
-        self.n_models = 10
+        self.n_models = n_models
 
     def get_extra_symbols_at_belief_level(self, belief_level):
         base_generateable_types = get_output_types(self.domain.streams)
@@ -88,21 +89,29 @@ class BspManager:
 
         have_found_a_plan = False
 
+        managers = {}
+        generators = {}
+
         for belief_level in range(min_belief_level, max_belief_level):
             if have_found_a_plan and take_first_plan:
                 break
             for horizon in range(current_min_horizon, max_plan_length):
-                solution = self.search_at_level(belief_level, horizon)
+                manager, generator, solution = self.search_at_level(
+                    belief_level, horizon
+                )
                 if solution is None:
                     continue
                 have_found_a_plan = True
                 self.solutions[(belief_level, horizon)] = solution
+                managers[(belief_level, horizon)] = manager
+                generators[(belief_level, horizon)] = generator
+                # break # necessary if we want to take very first example
                 if self.world_fully_generated(solution, belief_level):
                     break
             if have_found_a_plan:
                 current_min_horizon = horizon
 
-        return self.solutions
+        return managers, generators, self.solutions
 
     def search_at_level(self, level: int, horizon: int):
         extra_symbols = self.get_extra_symbols_at_belief_level(level)
@@ -132,9 +141,22 @@ class BspManager:
 
         if manager is None:
             print(f"No plan found with belief level {level}, horizon {horizon}.")
-            return None
+            return None, None, None
 
         new_env, new_facts, plan = manager.get_next_plan_and_world(
             self.env, generated_env, self.domain
         )
-        return new_env, new_facts, plan
+
+        # generator = lambda: manager.get_next_plan_and_world(
+        #    self.env, generated_env, self.domain
+        # )
+
+        def generator(manager=manager):
+            ne, nf, p = manager.get_next_plan_and_world(
+                self.env, generated_env, self.domain
+            )
+            print(f"Calling generator, n plans: {len(manager.plans)}")
+            manager.plans = manager.plans[:-1]
+            return ne, nf, p
+
+        return manager, generator, (new_env, new_facts, plan)

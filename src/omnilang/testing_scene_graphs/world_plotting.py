@@ -132,19 +132,24 @@ def plot_dsg(
     G: spark_dsg.DynamicSceneGraph,
     alpha=1,
     trav_layer_name=spark_dsg.DsgLayers.TRAVERSABILITY,
+    plot_labels=True,
 ):
     label_to_line = {}
     labels = plot_layer(
         G.get_layer(trav_layer_name),
         alpha=alpha,
         text_offset=0.01,
+        plot_labels=plot_labels,
     )
     label_to_line |= labels
     labels = plot_layer(
-        G.get_layer(spark_dsg.DsgLayers.OBJECTS), node_color="c", alpha=alpha
+        G.get_layer(spark_dsg.DsgLayers.OBJECTS),
+        node_color="c",
+        alpha=alpha,
+        plot_labels=plot_labels,
     )
     label_to_line |= labels
-    labels = plot_frontiers(G, plot_edges=True)
+    labels = plot_frontiers(G, plot_edges=True, plot_labels=plot_labels)
     label_to_line |= labels
     plot_interlayer_edges(
         G,
@@ -169,6 +174,7 @@ def plot_dsg(
         node_color="g",
         edge_lw=2,
         text_offset=0.1,
+        plot_labels=plot_labels,
     )
     label_to_line |= labels
 

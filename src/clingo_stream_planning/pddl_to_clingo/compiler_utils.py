@@ -6,9 +6,9 @@ from dataclasses import dataclass
 class ClingoPddlCompilerOptions:
     enable_streams: bool = True
     enable_derived_streams: bool = True
-    enable_optimization: bool = True
+    enable_optimization: bool = False
     enable_static_optimizations: bool = True
-    enable_groups: bool = False
+    enable_groups: bool = True
     enable_incremental: bool = False
 
 

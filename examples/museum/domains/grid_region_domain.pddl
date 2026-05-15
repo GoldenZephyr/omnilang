@@ -23,7 +23,14 @@
         (in-region ?r - region)
         (region-connected ?r1 - region ?r2 - region)
         (searched-region ?r - region)
+        (member ?e - object ?g - group)
+        (possibly-object ?o - obj ?p - place)
     )
+
+    (:derived (known-location ?o)
+        (or (observed ?o)
+            (forall (?p - place)
+                    (implies (possibly-object ?o ?p) (observed ?p)))))
 
     (:derived (in-region ?r)
         (exists (?p - place) (and (at ?p) (place-in-region ?p ?r))))
@@ -58,6 +65,7 @@
     ;(:action movegroup
     ;    :parameters (?s - place &g - location)
     ;    :precondition (and (at ?s)
+    ;                       ;(member ?s &g)
     ;                       (not (visited &g))
     ;                  )
     ;    :effect (and (visited &g)
@@ -66,14 +74,10 @@
     ;)
 
 
-    ;(:action pick
-    ;    :parameters (?o - obj ?p - place)
-    ;    :precondition (and (known-location ?o) (at ?p) (obj-at ?o ?p) (hand-free))
-    ;    :effect (and (not (obj-at ?o ?p)) (not (hand-free)) (holding ?o)))
-
 
     (:action pick
         :parameters (?o - obj ?p - place)
+        ;:precondition (and (known-location ?o) (at ?p) (obj-at ?o ?p) (hand-free))
         :precondition (and (at ?p) (obj-at ?o ?p) (hand-free))
         :effect (and (not (obj-at ?o ?p)) (not (hand-free)) (holding ?o)))
 

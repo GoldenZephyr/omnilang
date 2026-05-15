@@ -57,6 +57,7 @@ def compile_optimization_objectives(env, domain, state):
     # Currently, generate a plan in the "maximally feasible world"
     lines = ["% World objective to optimize"]
     lines += ["#maximize {1, X : inworld(X)}."]
+    lines += ["#minimize {2, X : ingroup(_, X)}."]
     return lines
 
 
@@ -71,6 +72,7 @@ def add_show_statements(options):
         lines.append("#show stream_derived/1.")
     if options.enable_groups:
         lines.append("#show ingroup/2.")
+        lines.append("#show group_chosen/3.")
 
     lines.append("#show w0/1.")
 

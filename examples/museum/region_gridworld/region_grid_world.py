@@ -26,14 +26,16 @@ from search_manager import BspManager
 import sys
 
 
-def get_env_and_state(Gobs, sim_state, domain):
+def get_env_and_state(Gobs, sim_state, domain, all_places_observed):
     type_to_subtypes = oml.compute_descendant_types(domain.pddl_domain.types)
     symbol_to_type, pddl_s0 = oml.dsg_to_region_problem(
         Gobs,
         spark_dsg.NodeSymbol(sim_state.current_node).str(),
         special_object_categories=type_to_subtypes.get("obj", []),
     )
-    oml.augment_planning_representation(DerivedDsg(Gobs), sim_state, pddl_s0)
+    oml.augment_planning_representation(
+        DerivedDsg(Gobs), sim_state, pddl_s0, all_places_observed=all_places_observed
+    )
 
     dsg_env = oml.DsgEnvironment(Gobs)
     env = oml.Environment(dsg_env, [], symbol_to_type, domain.pddl_domain.types)
@@ -45,21 +47,21 @@ def plot_solution(G, Gobs, sim_state, new_env, new_facts, plan):
     # labels_for_legend |= plot_dsg(G, 0.4)
     # labels_for_legend = layer_to_name(G, labels_for_legend, new_prefix="gt-")
 
-    obs_labels = plot_dsg(Gobs)
+    obs_labels = plot_dsg(Gobs, plot_labels=False)
     obs_labels = layer_to_name(Gobs, obs_labels)
     labels_for_legend |= obs_labels
 
     plot_state(Gobs, sim_state)
-    plan_labels = plot_plan_in_env(new_env, Gobs, plan)
-    labels_for_legend |= plan_labels
+    # plan_labels = plot_plan_in_env(new_env, Gobs, plan)
+    # labels_for_legend |= plan_labels
 
     gen_label_to_line = plot_generated_env(
-        new_env, new_facts, {"food": ">", "place": "p"}
+        new_env, new_facts, {"food": ">", "place": "p", "cone": "^"}, plot_labels=False
     )
     labels_for_legend |= gen_label_to_line
     lines = labels_for_legend.values()
     labels = labels_for_legend.keys()
-    plt.legend(lines, labels)
+    # plt.legend(lines, labels)
 
 
 def setup_dsg():
@@ -82,9 +84,16 @@ def setup_dsg():
     # observed_place_idx = list(range(81))
     known_region_idx = list(range(9))
 
-    observed_place_vals = set(
-        spark_dsg.NodeSymbol("t", idx).value for idx in observed_place_idx
-    )
+    full_place_observation = False
+    if full_place_observation:
+        observed_place_vals = set(
+            n.id.value for n in G.get_layer(spark_dsg.DsgLayers.TRAVERSABILITY).nodes
+        )
+    else:
+        observed_place_vals = set(
+            spark_dsg.NodeSymbol("t", idx).value for idx in observed_place_idx
+        )
+
     observed_object_vals = set(
         spark_dsg.NodeSymbol("o", idx).value for idx in observed_object_idx
     )
@@ -98,7 +107,11 @@ def setup_dsg():
     add_frontiers(G, DerivedDsg(Gobs))
 
     initial_node = spark_dsg.NodeSymbol("t", 0)
-    sim_state = SimulationState(initial_node.value, set(), observed_place_vals)
+    # observed_place_vals_for_planning = observed_place_vals
+    observed_place_vals_for_planning = set()
+    sim_state = SimulationState(
+        initial_node.value, set(), observed_place_vals_for_planning
+    )
 
     return G, Gobs, sim_state
 
@@ -123,13 +136,16 @@ def placeholder_position_generator(node):
 
 
 def setup_domain(Gobs, sim_state):
-    stream_path = [
-        "../streams/place_beyond_frontier.pddl",
-        # "../streams/simple_place_generates_food.pddl",
-        "../streams/region_streams.pddl",
-        "../streams/smart_pick_streams.pddl",
-        "../streams/cone_stream.pddl",
-    ]
+    stream_paths = ["../streams/place_beyond_frontier.pddl"]
+    unknown_places = True
+    enable_objects = True
+    if unknown_places:
+        stream_paths.append("../streams/region_streams.pddl")
+    if enable_objects:
+        # stream_paths.append("../streams/simple_place_generates_food.pddl")
+        stream_paths.append("../streams/smart_pick_streams.pddl")
+        stream_paths.append("../streams/cone_stream.pddl")
+
     pddl_path = "../domains/grid_region_domain.pddl"
 
     stream_functions = {}
@@ -137,13 +153,15 @@ def setup_domain(Gobs, sim_state):
     stream_functions["region-generates-place"] = placeholder_position_generator
     # stream_functions["unobserved-place-generates-food"] = placeholder_position_generator
     stream_functions["generate-possible-object"] = placeholder_position_generator
-    domain = oml.load_full_domain(pddl_path, stream_path, stream_functions)
+    domain = oml.load_full_domain(pddl_path, stream_paths, stream_functions)
 
-    env, pddl_s0 = get_env_and_state(Gobs, sim_state, domain)
+    env, pddl_s0 = get_env_and_state(
+        Gobs, sim_state, domain, all_places_observed=unknown_places
+    )
 
     def construct_bsp(goal):
         problem = oml.Problem(pddl_s0, goal)
-        bpm = BspManager(domain, env, problem)
+        bpm = BspManager(domain, env, problem, n_models=200)
         return bpm
 
     return construct_bsp
@@ -157,6 +175,11 @@ def near_factor(s: dict, t: dict, expected_distance=1):
 
 if __name__ == "__main__":
     G, Gobs, sim_state = setup_dsg()
+
+    # plot_dsg(Gobs, plot_labels=False)
+    # # plot_dsg(G, plot_labels=False)
+    # plt.show()
+    # abc
 
     valid_goals = [
         "goto-region",
@@ -197,8 +220,8 @@ if __name__ == "__main__":
             goal = oml.ExistentialQuantifier(
                 [oml.Symbol("?c")],
                 ["cone"],
-                # oml.Fact("holding", [oml.Symbol("?c")]),
-                oml.Fact("obj-at", [oml.Symbol("?c"), oml.Symbol("t0")]),
+                oml.Fact("holding", [oml.Symbol("?c")]),
+                # oml.Fact("obj-at", [oml.Symbol("?c"), oml.Symbol("t0")]),
             )
 
             goal_str = "Grab Cone"
@@ -245,7 +268,9 @@ if __name__ == "__main__":
 
     bpm = domain_constructor(Gobs, sim_state)(goal)
 
-    solutions = bpm.search((2, 6), (4, 12), take_first_plan=True)
+    # solutions = bpm.search((2, 6), (12, 14), take_first_plan=True)
+    managers, generators, solutions = bpm.search((4, 6), (12, 16), take_first_plan=True)
+    # solutions = bpm.search((2, 6), (32, 35), take_first_plan=True)
     # solutions = bpm.search((0, 6), (1, 20))
     # new_env, new_facts, plan = bpm.search_at_level(1, 4)
 
